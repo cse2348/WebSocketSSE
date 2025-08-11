@@ -8,9 +8,7 @@ group = 'com.example'
 version = '0.0.1-SNAPSHOT'
 
 java {
-	toolchain {
-		languageVersion = JavaLanguageVersion.of(17)
-	}
+	toolchain { languageVersion = JavaLanguageVersion.of(17) }
 }
 
 repositories {
@@ -18,10 +16,31 @@ repositories {
 }
 
 dependencies {
-	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
-	implementation 'org.springframework.boot:spring-boot-starter-mustache'
+	// Web & Validation
 	implementation 'org.springframework.boot:spring-boot-starter-web'
-	runtimeOnly 'com.h2database:h2'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+	// WebSocket(STOMP) & Security
+	implementation 'org.springframework.boot:spring-boot-starter-websocket'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+
+	// JPA
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+	// JWT (jjwt 0.11.x)
+	implementation 'io.jsonwebtoken:jjwt-api:0.11.5'
+	runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.11.5'
+	runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.11.5'
+
+	// DB 드라이버 (테스트는 H2, 배포는 MySQL)
+	runtimeOnly 'com.h2database:h2'                 // 로컬/메모리 테스트용
+	// runtimeOnly 'com.mysql:mysql-connector-j'    // MySQL/RDS 사용 시 이 줄 주석 해제
+
+	// Lombok (선택)
+	compileOnly 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
+
+	// Test
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 }
