@@ -1,7 +1,7 @@
 package com.example.WebSocketSSE.controller;
 
-import com.example.WebSocket_SSE.dto.ChatMessageDto;
-import com.example.WebSocket_SSE.service.ChatService;
+import com.example.WebSocketSSE.dto.ChatMessageDto;
+import com.example.WebSocketSSE.service.ChatService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;

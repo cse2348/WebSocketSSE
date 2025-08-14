@@ -1,13 +1,18 @@
 package com.example.WebSocketSSE.dto;
 
-import lombok.Data;
-import java.time.Instant;
+import lombok.*;
 
-@Data
+import java.time.LocalDateTime;
+
+@Getter
+@Setter
+@NoArgsConstructor
+@AllArgsConstructor
+@Builder
 public class ChatMessageDto {
     private Long id;
-    private String roomId;
+    private Long roomId;
     private Long senderId;
     private String content;
-    private Instant createdAt;
+    private LocalDateTime createdAt;
 }
