@@ -22,6 +22,7 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    @Column(nullable = false)
     private String role;
 
     public static User of(String username, String password, String role) {

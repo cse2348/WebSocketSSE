@@ -19,11 +19,13 @@ public class Application {
         return new BCryptPasswordEncoder();
     }
 
+    // 초기 유저 생성 (비밀번호는 BCrypt로 암호화)
     @Bean
     CommandLineRunner init(UserRepository userRepository, BCryptPasswordEncoder encoder) {
         return args -> {
             if (!userRepository.existsByUsername("user")) {
                 userRepository.save(User.of("user", encoder.encode("pass"), "ROLE_USER"));
+                System.out.println("초기 유저 생성: user/pass");
             }
         };
     }
