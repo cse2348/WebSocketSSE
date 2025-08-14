@@ -1,11 +1,13 @@
 package com.example.WebSocketSSE.config;
 
-import com.example.WebSocketSSE.util.JwtUtil;
+import com.example.WebSocketSSE.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -16,15 +18,15 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");            // 구독 목적지
-        registry.setApplicationDestinationPrefixes("/app");// 전송 목적지
+        registry.enableSimpleBroker("/topic"); // 구독 주소
+        registry.setApplicationDestinationPrefixes("/app"); // 발신 주소
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*"); // 테스트 편의. 배포 시 도메인 제한 권장
-        // .withSockJS(); // 필요 시 사용
+                .setAllowedOriginPatterns("*"); // 테스트용 전체 허용
+        // .withSockJS(); // 필요 시
     }
 
     @Override

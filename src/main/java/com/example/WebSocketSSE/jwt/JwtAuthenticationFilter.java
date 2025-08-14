@@ -1,6 +1,6 @@
 package com.example.WebSocketSSE.jwt;
 
-import com.example.WebSocketSSE.util.JwtUtil;
+import com.example.WebSocketSSE.jwt.JwtUtil;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jws;
 import jakarta.servlet.FilterChain;
