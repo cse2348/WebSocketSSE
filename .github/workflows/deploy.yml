@@ -7,6 +7,10 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }}
+      IMAGE_TAG: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -24,17 +28,27 @@ jobs:
       - name: Build
         run: ./gradlew clean build -x test
 
-      # Runner에서 ECR 로그인 (이미지 push용)
-      - name: Login to ECR
-        uses: aws-actions/amazon-ecr-login@v1
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ secrets.AWS_REGION }}
+          aws-access-key-id:     ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region:            ${{ secrets.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+        with:
+          aws-region:    ${{ secrets.AWS_REGION }}
+          mask-password: true
 
       - name: Build and Push Docker Image
         run: |
-          IMAGE_URI="${{ secrets.ECR_REPOSITORY }}:latest"
-          docker build -t "$IMAGE_URI" .
-          docker push "$IMAGE_URI"
+          set -euo pipefail
+          IMAGE_SHA="${{ secrets.ECR_REPOSITORY }}:${{ github.sha }}"
+          IMAGE_LATEST="${{ secrets.ECR_REPOSITORY }}:latest"
+          docker build -t "$IMAGE_SHA" -t "$IMAGE_LATEST" .
+          docker push "$IMAGE_SHA"
+          docker push "$IMAGE_LATEST"
 
       - name: SSH into EC2 and Deploy
         uses: appleboy/ssh-action@v1.0.0
@@ -43,12 +57,13 @@ jobs:
           username: ec2-user
           key: ${{ secrets.EC2_KEY }}
           script: |
-            set -e
+            set -euo pipefail
 
-            export AWS_REGION='${{ secrets.AWS_REGION }}'
-            export AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}'
-            export AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}'
             REGISTRY_HOST="$(echo '${{ secrets.ECR_REPOSITORY }}' | awk -F/ '{print $1}')"
+            AWS_REGION='${{ secrets.AWS_REGION }}'
+            AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}'
+            AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+            export AWS_REGION AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
             aws ecr get-login-password --region "$AWS_REGION" \
               | docker login --username AWS --password-stdin "$REGISTRY_HOST"
 
