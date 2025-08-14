@@ -20,6 +20,9 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	implementation 'org.springframework.boot:spring-boot-starter-validation'
 
+	// Actuator (헬스 체크)
+	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
 	// WebSocket(STOMP) & Security
 	implementation 'org.springframework.boot:spring-boot-starter-websocket'
 	implementation 'org.springframework.boot:spring-boot-starter-security'
@@ -32,9 +35,9 @@ dependencies {
 	runtimeOnly   'io.jsonwebtoken:jjwt-impl:0.11.5'
 	runtimeOnly   'io.jsonwebtoken:jjwt-jackson:0.11.5'
 
-	// DB 드라이버 (테스트는 H2, 배포는 MySQL)
-	runtimeOnly 'com.h2database:h2'                 // 로컬/메모리 테스트용
-	// runtimeOnly 'com.mysql:mysql-connector-j'    // MySQL/RDS 사용 시 이 줄 주석 해제
+	// DB 드라이버
+	runtimeOnly 'com.mysql:mysql-connector-j'
+	testRuntimeOnly 'com.h2database:h2'
 
 	// Lombok (선택)
 	compileOnly 'org.projectlombok:lombok'

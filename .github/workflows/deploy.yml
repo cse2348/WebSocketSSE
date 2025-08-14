@@ -7,10 +7,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      ECR_REPOSITORY: ${{ secrets.ECR_REPOSITORY }} # 예: 123456789012.dkr.ecr.ap-northeast-2.amazonaws.com/websocket
-      IMAGE_TAG: ${{ github.sha }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -18,100 +15,61 @@ jobs:
       - name: Set up JDK
         uses: actions/setup-java@v4
         with:
-          distribution: 'temurin'
-          java-version: '17'
-          cache: 'gradle'
-
-      - name: Configure AWS credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
+          distribution: temurin
+          java-version: "17"
 
       - name: Grant execute permission for gradlew
         run: chmod +x ./gradlew
 
-      - name: Build (bootJar only)
-        run: ./gradlew clean bootJar -x test
+      - name: Build
+        run: ./gradlew clean build -x test
 
-      - name: Login to Amazon ECR
-        uses: aws-actions/amazon-ecr-login@v2
+      # Runner에서 ECR 로그인 (이미지 push용)
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v1
+        with:
+          aws-region: ${{ secrets.AWS_REGION }}
 
-      - name: Build and Push Docker Image to ECR
+      - name: Build and Push Docker Image
         run: |
-          set -euo pipefail
-          IMAGE_URI="${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
-          LATEST_URI="${{ env.ECR_REPOSITORY }}:latest"
-
-          docker build -t "$IMAGE_URI" -t "$LATEST_URI" .
+          IMAGE_URI="${{ secrets.ECR_REPOSITORY }}:latest"
+          docker build -t "$IMAGE_URI" .
           docker push "$IMAGE_URI"
-          docker push "$LATEST_URI"
 
-      - name: Deploy to EC2
+      - name: SSH into EC2 and Deploy
         uses: appleboy/ssh-action@v1.0.0
         with:
           host: ${{ secrets.EC2_HOST }}
           username: ec2-user
           key: ${{ secrets.EC2_KEY }}
           script: |
-            set -euo pipefail
-            IMAGE_URI="${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}"
-            REGISTRY_HOST="$(echo "${{ env.ECR_REPOSITORY }}" | awk -F/ '{print $1}')"
+            set -e
 
-            # ECR login on EC2
-            aws ecr get-login-password --region "${{ env.AWS_REGION }}" \
-              | docker login --username AWS --password-stdin "${REGISTRY_HOST}"
+            export AWS_REGION='${{ secrets.AWS_REGION }}'
+            export AWS_ACCESS_KEY_ID='${{ secrets.AWS_ACCESS_KEY_ID }}'
+            export AWS_SECRET_ACCESS_KEY='${{ secrets.AWS_SECRET_ACCESS_KEY }}'
+            REGISTRY_HOST="$(echo '${{ secrets.ECR_REPOSITORY }}' | awk -F/ '{print $1}')"
+            aws ecr get-login-password --region "$AWS_REGION" \
+              | docker login --username AWS --password-stdin "$REGISTRY_HOST"
 
-            # .env 작성 (컨테이너 환경변수)
             cat > .env <<'EOF'
             SPRING_DATASOURCE_URL=${{ secrets.SPRING_DATASOURCE_URL }}
             SPRING_DATASOURCE_USERNAME=${{ secrets.SPRING_DATASOURCE_USERNAME }}
             SPRING_DATASOURCE_PASSWORD=${{ secrets.SPRING_DATASOURCE_PASSWORD }}
             JWT_SECRET=${{ secrets.JWT_SECRET }}
-            # 필요 시 추가 (없으면 비워둬도 됨)
-            SSE_TIMEOUT=${{ secrets.SSE_TIMEOUT }}
-            SSE_RETRY_INTERVAL=${{ secrets.SSE_RETRY_INTERVAL }}
+            SPRING_DATA_REDIS_HOST=${{ secrets.SPRING_DATA_REDIS_HOST }}
+            SPRING_DATA_REDIS_PORT=${{ secrets.SPRING_DATA_REDIS_PORT }}
             EOF
 
-            # 최신 이미지 풀
+            IMAGE_URI='${{ secrets.ECR_REPOSITORY }}:latest'
+
             docker pull "$IMAGE_URI"
+            docker stop app || true
+            docker rm app || true
 
-            # 기존 컨테이너 정리
-            docker ps -q --filter "name=app" | grep -q . && docker stop app || true
-            docker ps -aq --filter "name=app" | grep -q . && docker rm app || true
-
-            # 새 컨테이너 실행
-            # - 8080 publish (ALB 타깃 포트)
-            # - 헬스체크: 컨테이너 내부에서 /health 확인 (Actuator를 /health로 노출했을 때)
             docker run -d \
               --name app \
               --restart=always \
               --env-file .env \
               -p 8080:8080 \
-              --health-cmd="wget -qO- http://localhost:8080/health || exit 1" \
-              --health-interval=15s \
-              --health-timeout=3s \
-              --health-retries=5 \
               "$IMAGE_URI"
-
-            echo "Waiting for container health..."
-            for i in {1..12}; do
-              STATUS=$(docker inspect --format='{{json .State.Health.Status}}' app 2>/dev/null || echo "\"starting\"")
-              echo "Health status: ${STATUS}"
-              if [ "${STATUS}" = "\"healthy\"" ]; then
-                break
-              fi
-              sleep 15
-            done
-
-            # 최종 상태 점검
-            docker ps
-            docker logs --tail=100 app || true
-
-            # .env는 남겨두고 싶지 않으면 주석 해제
-            # rm -f .env
-
-      - name: Post-cleanup (local)
-        if: always()
-        run: docker image prune -f
