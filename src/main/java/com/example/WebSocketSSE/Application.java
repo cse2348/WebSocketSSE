@@ -31,9 +31,6 @@ public class Application {
                 userRepository.save(User.of("user2", encoder.encode("pass2"), "ROLE_USER"));
                 System.out.println("초기 유저 생성: user2 / pass2");
             }
-            // 원하면 이름만 바꿔서 alice/bob도 가능:
-            // if (!userRepository.existsByUsername("alice")) { ... }
-            // if (!userRepository.existsByUsername("bob"))   { ... }
         };
     }
 }
