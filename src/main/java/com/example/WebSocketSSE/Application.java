@@ -19,14 +19,21 @@ public class Application {
         return new BCryptPasswordEncoder();
     }
 
-    // 초기 유저 생성 (비밀번호는 BCrypt로 암호화)
+    // 초기 유저 2명 생성 (비밀번호는 BCrypt로 암호화)
     @Bean
     CommandLineRunner init(UserRepository userRepository, BCryptPasswordEncoder encoder) {
         return args -> {
-            if (!userRepository.existsByUsername("user")) {
-                userRepository.save(User.of("user", encoder.encode("pass"), "ROLE_USER"));
-                System.out.println("초기 유저 생성: user/pass");
+            if (!userRepository.existsByUsername("user1")) {
+                userRepository.save(User.of("user1", encoder.encode("pass1"), "ROLE_USER"));
+                System.out.println("초기 유저 생성: user1 / pass1");
             }
+            if (!userRepository.existsByUsername("user2")) {
+                userRepository.save(User.of("user2", encoder.encode("pass2"), "ROLE_USER"));
+                System.out.println("초기 유저 생성: user2 / pass2");
+            }
+            // 원하면 이름만 바꿔서 alice/bob도 가능:
+            // if (!userRepository.existsByUsername("alice")) { ... }
+            // if (!userRepository.existsByUsername("bob"))   { ... }
         };
     }
 }
