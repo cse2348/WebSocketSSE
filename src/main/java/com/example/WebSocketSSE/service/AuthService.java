@@ -10,22 +10,23 @@ import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
-@RequiredArgsConstructor
+@RequiredArgsConstructor // final 필드 포함 생성자 자동 생성
 public class AuthService {
 
-    private final UserRepository userRepository;
-    private final BCryptPasswordEncoder encoder;
-    private final JwtUtil jwtUtil;
+    private final UserRepository userRepository; // 사용자 정보 조회/저장 JPA 리포지토리
+    private final BCryptPasswordEncoder encoder; // 비밀번호 암호화/검증 클래스
+    private final JwtUtil jwtUtil; // JWT 생성 및 검증 유틸
 
-    public LoginResponse login(LoginRequest request) {
-        User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    public LoginResponse login(LoginRequest request) { // 로그인 처리 메서드
+        User user = userRepository.findByUsername(request.getUsername()) // username으로 사용자 조회
+                .orElseThrow(() -> new RuntimeException("User not found")); // 없으면 예외 발생
 
-        if (!encoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid password");
+        if (!encoder.matches(request.getPassword(), user.getPassword())) { // 비밀번호 검증
+            throw new RuntimeException("Invalid password"); // 틀리면 예외 발생
         }
 
-        String token = jwtUtil.generateToken(user.getId());
-        return new LoginResponse(token);
+        String token = jwtUtil.generateToken(user.getId()); // JWT 토큰 생성
+        return new LoginResponse(token); // 토큰을 포함한 응답 반환
     }
 }
+

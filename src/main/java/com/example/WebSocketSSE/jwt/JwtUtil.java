@@ -13,33 +13,33 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final Key key;
+    private final Key key; // JWT 서명 키
 
-    public JwtUtil(@Value("${JWT_SECRET}") String secret) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+    public JwtUtil(@Value("${JWT_SECRET}") String secret) { // 환경변수에서 JWT_SECRET 읽어오기
+        this.key = Keys.hmacShaKeyFor(secret.getBytes()); // 서명 키 생성
     }
 
     // JWT 생성
     public String generateToken(Long userId) {
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간
-                .signWith(key, SignatureAlgorithm.HS256)
-                .compact();
+                .setSubject(String.valueOf(userId)) // 사용자 ID를 subject에 저장
+                .setIssuedAt(new Date()) // 발급 시간
+                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 만료 시간(1시간)
+                .signWith(key, SignatureAlgorithm.HS256) // HMAC-SHA256 서명
+                .compact(); // 최종 문자열 형태로 변환
     }
 
-    // token에서 userId 추출 (JwtAuthenticationFilter용)
+    // JWT 검증 및 userId 추출 (JwtAuthenticationFilter에서 사용)
     public Long validateAndGetUserId(String token) {
-        return Long.valueOf(parse(token).getSubject());
+        return Long.valueOf(parse(token).getSubject()); // 토큰 파싱 후 subject 반환
     }
 
-    // token 파싱해서 Claims 반환 (StompAuthChannelInterceptor용)
+    // 토큰 파싱하여 Claims(페이로드) 반환 (StompAuthChannelInterceptor에서 사용)
     public Claims parse(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(key) // 서명 키 설정
                 .build()
-                .parseClaimsJws(token)
-                .getBody();
+                .parseClaimsJws(token) // JWT 파싱 및 서명 검증
+                .getBody(); // Claims 반환
     }
 }
