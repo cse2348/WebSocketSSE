@@ -8,8 +8,7 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.stereotype.Component;
-
-import java.security.Principal;
+import org.springframework.security.core.Authentication;
 
 @Component // 스프링 빈 등록
 @RequiredArgsConstructor // final 필드 포함 생성자 자동 생성
@@ -24,16 +23,16 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         // CONNECT 명령일 때 JWT 검증 수행
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) { // enum으로 안전 비교
             String token = accessor.getFirstNativeHeader("Authorization"); // Authorization 헤더 값 가져오기
-            if (token == null || !token.startsWith("Bearer ")) { //  누락 시 명확히 에러발생
+            if (token == null || !token.startsWith("Bearer ")) { // 누락 시 명확히 에러발생
                 throw new IllegalArgumentException("Missing Authorization Bearer token in STOMP CONNECT");
             }
             token = token.substring(7); // Bearer 제거하여 실제 토큰만 추출
 
-            // JwtUtil로 토큰 검증 및 사용자 ID 추출
-            Long userId = jwtUtil.validateAndGetUserId(token);
+            // JwtUtil로 Authentication 객체 생성
+            Authentication authentication = jwtUtil.getAuthentication(token);
 
-            // STOMP 세션에 Principal(사용자) 정보 설정 (userId를 name으로 보관)
-            accessor.setUser((Principal) () -> String.valueOf(userId)); // Principal 주입 보장
+            // STOMP 세션에 Authentication 등록
+            accessor.setUser(authentication);
         }
         return message; // 메시지 그대로 반환
     }

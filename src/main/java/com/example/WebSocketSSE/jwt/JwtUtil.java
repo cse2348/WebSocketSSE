@@ -5,9 +5,14 @@ import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.User;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
 import java.security.Key;
+import java.util.Collections;
 import java.util.Date;
 
 @Component
@@ -41,5 +46,20 @@ public class JwtUtil {
                 .build()
                 .parseClaimsJws(token) // JWT 파싱 및 서명 검증
                 .getBody(); // Claims 반환
+    }
+
+    // JWT로부터 Spring Security가 이해하는 Authentication 객체 생성
+    public Authentication getAuthentication(String token) {
+        Long userId = validateAndGetUserId(token);
+
+        // Spring Security UserDetails 생성 (권한 필요시 여기서 부여)
+        UserDetails userDetails = User.builder()
+                .username(String.valueOf(userId))
+                .password("") // JWT 기반 인증이라 비밀번호 불필요
+                .authorities(Collections.emptyList())
+                .build();
+
+        // Authentication 객체 반환
+        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
     }
 }
