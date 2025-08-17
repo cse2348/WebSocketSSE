@@ -17,10 +17,14 @@ public class ChatController {
 
     @MessageMapping("/chat.send") // 클라이언트에서 "/app/chat.send" 경로로 전송한 메시지 처리
     public void send(ChatMessageDto dto, Principal principal) { // Principal로 인증된 사용자 정보 받음
-        Long userId = Long.valueOf(principal.getName()); // Principal에서 사용자 ID 추출
+        if (principal == null) { // 인증 누락 방어(디버깅 용이)
+            throw new IllegalStateException("Unauthenticated STOMP message (missing Principal)");
+        }
+
+        Long userId = Long.valueOf(principal.getName()); // Principal에서 사용자 ID 추출 (StompAuth에서 userId로 세팅)
         dto.setSenderId(userId); // 메시지 보낸 사람 ID 설정
+
         var saved = chatService.save(dto); // 채팅 메시지 저장
         template.convertAndSend("/topic/chat/" + saved.getRoomId(), saved); // 해당 채팅방 구독자들에게 메시지 전송
     }
 }
-
