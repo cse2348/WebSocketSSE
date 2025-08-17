@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="ko">
+<head>
+    <meta charset="utf-8"/>
+    <title>WebSocket(STOMP) 테스트</title>
+    <style>
+        body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; }
+        input, button { padding: 8px; margin: 4px 0; }
+        #log { white-space: pre-wrap; border: 1px solid #ddd; padding: 12px; height: 280px; overflow: auto; }
+        .row { display:flex; gap:8px; align-items:center; }
+        .row > input { flex: 1 }
+    </style>
+    <!-- CDN: SockJS & STOMP -->
+    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
+</head>
+<body>
+<h2>WebSocket(STOMP) 채팅 테스트</h2>
+
+<div class="row">
+    <label style="width:110px">서버</label>
+    <input id="base" value="https://backendteamb.site">
+</div>
+<div class="row">
+    <label style="width:110px">JWT 토큰</label>
+    <input id="token" placeholder="로그인 응답의 token 붙여넣기">
+</div>
+<div class="row">
+    <label style="width:110px">방 ID</label>
+    <input id="roomId" value="1">
+</div>
+
+<div class="row">
+    <button id="btnConnect">연결하기</button>
+    <button id="btnSubscribe" disabled>구독하기</button>
+    <button id="btnDisconnect" disabled>끊기</button>
+</div>
+
+<div class="row">
+    <input id="message" placeholder="메시지 입력">
+    <button id="btnSend" disabled>보내기</button>
+</div>
+
+<h3>로그</h3>
+<div id="log"></div>
+
+<script>
+    let stompClient = null;
+    const $ = (id) => document.getElementById(id);
+    const log = (msg) => { const el = $("log"); el.textContent += msg + "\n"; el.scrollTop = el.scrollHeight; };
+
+    $("btnConnect").onclick = () => {
+        const base = $("base").value.trim();
+        const token = $("token").value.trim();
+        if (!token) { alert("JWT 토큰을 입력하세요 (/auth/login 응답)"); return; }
+
+        const sock = new SockJS(base + "/ws/chat");
+        stompClient = Stomp.over(sock);
+        stompClient.debug = (s) => log(s);
+
+        stompClient.connect(
+            { Authorization: "Bearer " + token }, // CONNECT 헤더에 JWT
+            frame => {
+                log("🟢 연결됨: " + frame);
+                $("btnSubscribe").disabled = false;
+                $("btnDisconnect").disabled = false;
+            },
+            err => { log("연결 실패: " + err); }
+        );
+    };
+
+    $("btnSubscribe").onclick = () => {
+        const roomId = $("roomId").value.trim();
+        if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
+        const topic = "/topic/chat/" + roomId;
+        stompClient.subscribe(topic, (msg) => {
+            log("수신: " + msg.body);
+        });
+        log("구독: " + topic);
+        $("btnSend").disabled = false;
+    };
+
+    $("btnSend").onclick = () => {
+        const roomId = Number($("roomId").value.trim());
+        const text = $("message").value;
+        if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
+        const payload = { roomId, content: text };
+        stompClient.send("/app/chat.send", {}, JSON.stringify(payload));
+        log("전송: " + JSON.stringify(payload));
+        $("message").value = "";
+    };
+
+    $("btnDisconnect").onclick = () => {
+        if (stompClient) stompClient.disconnect(() => log("연결 해제"));
+        $("btnSubscribe").disabled = true;
+        $("btnSend").disabled = true;
+        $("btnDisconnect").disabled = true;
+    };
+</script>
+</body>
+</html>
