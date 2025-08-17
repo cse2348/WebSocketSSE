@@ -22,7 +22,17 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         // CONNECT 명령일 때 JWT 검증 수행
         if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) { // enum으로 안전 비교
+
+            // ========================= ▼ 디버깅 로그 1 ▼ =========================
+            System.out.println("### STOMP CONNECT 요청 도착, JWT 검증을 시작합니다.");
+            // =====================================================================
+
             String token = accessor.getFirstNativeHeader("Authorization"); // Authorization 헤더 값 가져오기
+
+            // ========================= ▼ 디버깅 로그 2 ▼ =========================
+            System.out.println("### Authorization 헤더: " + token);
+            // =====================================================================
+
             if (token == null || !token.startsWith("Bearer ")) { // 누락 시 명확히 에러발생
                 throw new IllegalArgumentException("Missing Authorization Bearer token in STOMP CONNECT");
             }
@@ -33,6 +43,10 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
             // STOMP 세션에 Authentication 등록
             accessor.setUser(authentication);
+
+            // ========================= ▼ 디버깅 로그 3 ▼ =========================
+            System.out.println("### JWT 검증 성공, 사용자 '" + authentication.getName() + "'를 세션에 등록했습니다.");
+            // =====================================================================
         }
         return message; // 메시지 그대로 반환
     }
