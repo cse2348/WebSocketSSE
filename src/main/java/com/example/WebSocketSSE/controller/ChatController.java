@@ -21,8 +21,19 @@ public class ChatController {
             throw new IllegalStateException("Unauthenticated STOMP message (missing Principal)");
         }
 
-        Long userId = Long.valueOf(principal.getName()); // Principal에서 사용자 ID 추출 (StompAuth에서 userId로 세팅)
+        Long userId;
+        try {
+            // Principal이 userId(Long)일 때
+            userId = Long.valueOf(principal.getName());
+        } catch (NumberFormatException e) {
+            // Principal이 username(String)일 때 → DB에서 userId 조회
+            userId = chatService.findUserIdByUsername(principal.getName());
+        }
         dto.setSenderId(userId); // 메시지 보낸 사람 ID 설정
+
+        if (dto.getRoomId() == null) { // roomId 누락 방어
+            throw new IllegalArgumentException("roomId is required in message body");
+        }
 
         var saved = chatService.save(dto); // 채팅 메시지 저장
         template.convertAndSend("/topic/chat/" + saved.getRoomId(), saved); // 해당 채팅방 구독자들에게 메시지 전송

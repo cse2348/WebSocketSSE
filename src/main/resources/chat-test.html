@@ -10,12 +10,11 @@
         .row { display:flex; gap:8px; align-items:center; }
         .row > input { flex: 1 }
     </style>
-    <!-- CDN: SockJS & STOMP -->
-    <script src="https://cdn.jsdelivr.net/npm/sockjs-client@1/dist/sockjs.min.js"></script>
+    <!-- CDN: STOMP -->
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
 </head>
 <body>
-<h2>WebSocket(STOMP) 채팅 테스트</h2>
+<h2>WebSocket(STOMP) 채팅 테스트 (네이티브 WebSocket)</h2>
 
 <div class="row">
     <label style="width:110px">서버</label>
@@ -54,12 +53,16 @@
         const token = $("token").value.trim();
         if (!token) { alert("JWT 토큰을 입력하세요 (/auth/login 응답)"); return; }
 
-        const sock = new SockJS(base + "/ws/chat");
+        // 네이티브 WebSocket URL 생성 (http → ws, https → wss)
+        const wsUrl = base.replace(/^http/, "ws") + "/ws/chat";
+
+        const sock = new WebSocket(wsUrl);
         stompClient = Stomp.over(sock);
         stompClient.debug = (s) => log(s);
 
+        // CONNECT 헤더에 JWT 넣기
         stompClient.connect(
-            { Authorization: "Bearer " + token }, // CONNECT 헤더에 JWT
+            { Authorization: "Bearer " + token }, // 헤더 전달
             frame => {
                 log("🟢 연결됨: " + frame);
                 $("btnSubscribe").disabled = false;
