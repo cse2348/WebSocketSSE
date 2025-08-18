@@ -14,11 +14,6 @@ public class Application {
         SpringApplication.run(Application.class, args);
     }
 
-    @Bean
-    BCryptPasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
-    }
-
     // 초기 유저 2명 생성 (비밀번호는 BCrypt로 암호화)
     @Bean
     CommandLineRunner init(UserRepository userRepository, BCryptPasswordEncoder encoder) {
