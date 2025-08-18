@@ -3,6 +3,7 @@ package com.example.WebSocketSSE.controller;
 import com.example.WebSocketSSE.dto.ChatMessageDto;
 import com.example.WebSocketSSE.service.ChatService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
@@ -15,8 +16,8 @@ public class ChatController {
     private final SimpMessagingTemplate template; // 메시지를 특정 구독자들에게 전송하는 유틸
     private final ChatService chatService; // 채팅 메시지 저장/조회 서비스
 
-    @MessageMapping("/chat.send") // 클라이언트에서 "/app/chat.send" 경로로 전송한 메시지 처리
-    public void send(ChatMessageDto dto, Principal principal) { // Principal로 인증된 사용자 정보 받음
+    @MessageMapping("/chat/{roomId}/send") // 클라이언트에서 "/app/chat/{roomId}/send" 경로로 전송한 메시지 처리
+    public void send(@DestinationVariable Long roomId, ChatMessageDto dto, Principal principal) {
         if (principal == null) { // 인증 누락 방어(디버깅 용이)
             throw new IllegalStateException("Unauthenticated STOMP message (missing Principal)");
         }
@@ -30,6 +31,7 @@ public class ChatController {
             userId = chatService.findUserIdByUsername(principal.getName());
         }
         dto.setSenderId(userId); // 메시지 보낸 사람 ID 설정
+        dto.setRoomId(roomId);   // 메시지 대상 채팅방 설정
 
         if (dto.getRoomId() == null) { // roomId 누락 방어
             throw new IllegalArgumentException("roomId is required in message body");
