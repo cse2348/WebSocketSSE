@@ -6,38 +6,39 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.stereotype.Controller;
 
-import java.security.Principal;
-
-@Controller // 웹소켓/STOMP 메시지 처리를 담당하는 컨트롤러
-@RequiredArgsConstructor // final 필드 포함 생성자 자동 생성
+@Controller
+@RequiredArgsConstructor
 public class ChatController {
-    private final SimpMessagingTemplate template; // 메시지를 특정 구독자들에게 전송하는 유틸
-    private final ChatService chatService; // 채팅 메시지 저장/조회 서비스
 
-    @MessageMapping("/chat/{roomId}/send") // 클라이언트에서 "/app/chat/{roomId}/send" 경로로 전송한 메시지 처리
-    public void send(@DestinationVariable Long roomId, ChatMessageDto dto, Principal principal) {
-        if (principal == null) { // 인증 누락 방어(디버깅 용이)
-            throw new IllegalStateException("Unauthenticated STOMP message (missing Principal)");
+    private final SimpMessagingTemplate template;
+    private final ChatService chatService;
+
+    // 클라이언트 → /app/chat/{roomId}/send 로 전송하면 처리
+    // 구독 경로는 /topic/chat/{roomId}
+    @MessageMapping("/chat/{roomId}/send")
+    public void send(@DestinationVariable Long roomId,
+                     ChatMessageDto dto,
+                     @AuthenticationPrincipal String userId) {
+
+        if (userId == null || userId.isBlank()) {
+            throw new IllegalStateException("Unauthenticated STOMP message (missing principal userId)");
+        }
+        if (roomId == null) {
+            throw new IllegalArgumentException("roomId is required");
+        }
+        if (dto == null || dto.getContent() == null || dto.getContent().isBlank()) {
+            throw new IllegalArgumentException("message content is required");
         }
 
-        Long userId;
-        try {
-            // Principal이 userId(Long)일 때
-            userId = Long.valueOf(principal.getName());
-        } catch (NumberFormatException e) {
-            // Principal이 username(String)일 때 → DB에서 userId 조회
-            userId = chatService.findUserIdByUsername(principal.getName());
-        }
-        dto.setSenderId(userId); // 메시지 보낸 사람 ID 설정
-        dto.setRoomId(roomId);   // 메시지 대상 채팅방 설정
+        // sender/room 설정
+        dto.setSenderId(Long.parseLong(userId));
+        dto.setRoomId(roomId);
 
-        if (dto.getRoomId() == null) { // roomId 누락 방어
-            throw new IllegalArgumentException("roomId is required in message body");
-        }
-
-        var saved = chatService.save(dto); // 채팅 메시지 저장
-        template.convertAndSend("/topic/chat/" + saved.getRoomId(), saved); // 해당 채팅방 구독자들에게 메시지 전송
+        // 저장 후 브로드캐스트
+        var saved = chatService.save(dto);
+        template.convertAndSend("/topic/chat/" + saved.getRoomId(), saved);
     }
 }

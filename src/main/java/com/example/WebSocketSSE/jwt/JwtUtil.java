@@ -7,10 +7,9 @@ import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
-import org.springframework.security.core.userdetails.User;
-import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Collections;
 import java.util.Date;
@@ -18,38 +17,21 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final Key key; // JWT 서명 키
+    private final Key key;
 
     public JwtUtil(@Value("${JWT_SECRET}") String secret) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes());
+        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
-    // 토큰 생성
     public String generateToken(Long userId) {
         return Jwts.builder()
-                .setSubject(String.valueOf(userId)) // userId를 subject에 저장
+                .setSubject(String.valueOf(userId))   // sub = userId
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간 유효
+                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
-    // 토큰 유효성 검증
-    public boolean validateToken(String token) {
-        try {
-            parse(token); // 만료/서명 검증
-            return true;
-        } catch (Exception e) {
-            return false;
-        }
-    }
-
-    // userId(Long) 추출
-    public Long validateAndGetUserId(String token) {
-        return Long.valueOf(parse(token).getSubject());
-    }
-
-    // Claims 파싱
     public Claims parse(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
@@ -58,15 +40,19 @@ public class JwtUtil {
                 .getBody();
     }
 
-    // Authentication 객체 생성
+    public Long validateAndGetUserId(String token) {
+        return Long.valueOf(parse(token).getSubject());
+    }
+
+    // 토큰에서 userId를 꺼내 **그 문자열을 principal** 로 넣어 Authentication 생성
     public Authentication getAuthentication(String token) {
         Long userId = validateAndGetUserId(token);
+        String principal = String.valueOf(userId); // ← 컨트롤러에서 그대로 사용
 
-        UserDetails userDetails = User.withUsername(String.valueOf(userId))
-                .password("") // JWT 기반 인증이므로 비번 불필요
-                .authorities(Collections.emptyList())
-                .build();
-
-        return new UsernamePasswordAuthenticationToken(userDetails, null, userDetails.getAuthorities());
+        return new UsernamePasswordAuthenticationToken(
+                principal,            // principal: "2" 같은 문자열
+                null,
+                Collections.emptyList()
+        );
     }
 }
