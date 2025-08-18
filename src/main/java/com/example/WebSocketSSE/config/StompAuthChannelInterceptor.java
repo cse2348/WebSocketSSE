@@ -46,7 +46,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
                 System.out.println("[STOMP] 인증 성공 - principal=" + authentication.getPrincipal());
             } catch (Exception e) {
-                System.out.println("[STOMP] 인증 처리 중 예외: " + e.getMessage());
+                System.out.println("[STOMP] 인증 처리 중 예외: " + e.getClass().getSimpleName() + " - " + e.getMessage());
                 throw e;
             }
         }

@@ -2,77 +2,148 @@ package com.example.WebSocketSSE.jwt;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
-import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
-import java.security.Key;
+import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.time.Duration;
+import java.util.Base64;
 import java.util.Collections;
 import java.util.Date;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.Authentication;
 
 @Component
 public class JwtUtil {
 
-    private final Key key; // JWT 서명 키
-    // 생성자 주입을 통해 application.properties에서 JWT 비밀 키를 읽어옴
+    private static final Duration DEFAULT_EXP = Duration.ofHours(1); // 1시간
+    private final SecretKey key; // JWT 서명 키
+
     public JwtUtil(@Value("${jwt.secret}") String secret) {
-        // UTF-8 인코딩 대신, 표준인 Base64 디코딩으로 수정
-        byte[] keyBytes = Decoders.BASE64.decode(secret.trim());
+        String cleaned = secret == null ? "" : secret.trim();
+        if (cleaned.isEmpty()) {
+            throw new IllegalArgumentException("JWT secret is empty. Set jwt.secret / JWT_SECRET.");
+        }
+
+        byte[] keyBytes;
+        if (looksLikeBase64(cleaned)) {
+            // Base64라면 decode
+            try {
+                keyBytes = Decoders.BASE64.decode(cleaned);
+            } catch (IllegalArgumentException e) {
+                // Base64 모양인데 깨진 값 → 평문으로 폴백
+                keyBytes = cleaned.getBytes(StandardCharsets.UTF_8);
+            }
+        } else {
+            // 평문
+            keyBytes = cleaned.getBytes(StandardCharsets.UTF_8);
+        }
+
+        // HS256 권장 최소 256bit = 32바이트
+        if (keyBytes.length < 32) {
+            throw new IllegalArgumentException("JWT secret too short (need >= 32 bytes / 256 bits).");
+        }
+
         this.key = Keys.hmacShaKeyFor(keyBytes);
+
+        // 가시화: 서버 기동 시 키 지문(앞 8바이트의 SHA-256 헤더) 출력
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(key.getEncoded());
+            StringBuilder fp = new StringBuilder();
+            for (int i = 0; i < 8 && i < digest.length; i++) {
+                fp.append(String.format("%02x", digest[i]));
+            }
+            System.out.println("[JWT] key fingerprint=" + fp + " (head8)");
+        } catch (Exception ignore) { /* no-op */ }
     }
 
-    // 토큰 생성 (sub = userId)
+    // Base64로 '보일' 때만 true (길이 4 배수 + 허용문자 + 최대 2개 패딩)
+    private boolean looksLikeBase64(String s) {
+        if (s.length() % 4 != 0) return false;
+        return s.matches("^[A-Za-z0-9+/]+={0,2}$");
+    }
+
+    // 토큰 생성 (sub=userId)
     public String generateToken(Long userId) {
+        if (userId == null) throw new IllegalArgumentException("userId is null.");
+        long now = System.currentTimeMillis();
+        Date iat = new Date(now);
+        Date exp = new Date(now + DEFAULT_EXP.toMillis());
+
         return Jwts.builder()
-                .setSubject(String.valueOf(userId)) // userId를 subject에 저장
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간 유효
+                .setSubject(String.valueOf(userId))
+                .setIssuedAt(iat)
+                .setExpiration(exp)
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
+    // Bearer 접두사 제거 (편의용)
+    private String stripBearer(String token) {
+        if (token == null) return null;
+        String t = token.trim();
+        if (t.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return t.substring(7).trim();
+        }
+        return t;
+    }
+
     // Claims 파싱(서명/만료 검증 포함)
     public Claims parse(String token) {
-        return Jwts.parserBuilder()// JWT 파서 빌더 생성
-                .setSigningKey(key)// 서명 검증을 위한 키 설정
-                .build()// 파서 빌더로부터 JWT 파서 생성
-                .parseClaimsJws(token) // 토큰 파싱 및 검증
-                .getBody(); // Claims 객체 반환
+        String raw = stripBearer(token);
+        if (raw == null || raw.isEmpty()) {
+            throw new IllegalArgumentException("JWT token is empty.");
+        }
+        return Jwts.parserBuilder()
+                .setSigningKey(key)
+                .build()
+                .parseClaimsJws(raw)
+                .getBody();
     }
 
-    // userId(Long) 추출
+    // userId(Long) 추출 (유효성 포함)
     public Long validateAndGetUserId(String token) {
-        // 토큰 파싱 후 Claims에서 subject(=userId) 추출
-        return Long.valueOf(parse(token).getSubject());
+        Claims c = parse(token);
+        String sub = c.getSubject();
+        if (sub == null || sub.isEmpty()) {
+            throw new JwtException("JWT subject is empty.");
+        }
+        try {
+            return Long.valueOf(sub);
+        } catch (NumberFormatException e) {
+            throw new JwtException("JWT subject is not a valid Long: " + sub);
+        }
     }
 
-    //  토큰 유효성만 체크 (서명/만료 등)
+    //  토큰 유효성만 체크
     public boolean validateToken(String token) {
         try {
             parse(token);
-            // 토큰이 유효하면 true 반환
             return true;
-            // 만약 토큰이 유효하지 않으면 JwtException이 발생
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
     }
 
-    // 토큰에서 userId를 꺼내 그 문자열을 Principal로 넣어 Authentication 생성
+    // Authentication 구성 (Principal = userId 문자열)
     public Authentication getAuthentication(String token) {
         Long userId = validateAndGetUserId(token);
-        // Principal(주체)의 이름(getName())에 userId를 문자열로 저장
         String principal = String.valueOf(userId);
-        // 컨트롤러에서 @AuthenticationPrincipal 어노테이션으로 이 userId 값을 쉽게 꺼내 쓸 수 있음
         return new UsernamePasswordAuthenticationToken(
-                principal, // 주체 정보 (여기서는 userId)
-                null,      // 자격 증명(비밀번호)은 사용하지 않으므로 null
-                Collections.emptyList() // 권한 정보는 없으므로 빈 리스트
+                principal,
+                null,
+                Collections.emptyList()
         );
+    }
+
+    public SecretKey getKey() {
+        return key;
     }
 }
