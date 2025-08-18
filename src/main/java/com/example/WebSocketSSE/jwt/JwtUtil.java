@@ -18,21 +18,26 @@ import java.util.Date;
 @Component
 public class JwtUtil {
 
-    private final Key key;
-
-    public JwtUtil(@Value("${JWT_SECRET}") String secret) {
-        this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+    private final Key key; // JWT 서명 키
+    // 생성자 주입을 통해 application.properties에서 JWT 비밀 키를 읽어옴
+    public JwtUtil(@Value("${jwt.secret}") String secret) {
+        // 한쪽은 BASE64, 한쪽은 평문이면 또 서명 오류가 나므로 방식도 통일!
+        // (이번 프로젝트에선 '평문 UTF-8'을 표준으로 사용)
+        byte[] keyBytes = secret.trim().getBytes(StandardCharsets.UTF_8);
+        this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
+    // 토큰 생성 (sub = userId)
     public String generateToken(Long userId) {
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))   // sub = userId
+                .setSubject(String.valueOf(userId)) // userId를 subject에 저장
                 .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간
+                .setExpiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60)) // 1시간 유효
                 .signWith(key, SignatureAlgorithm.HS256)
                 .compact();
     }
 
+    // Claims 파싱(서명/만료 검증 포함)
     public Claims parse(String token) {
         return Jwts.parserBuilder()
                 .setSigningKey(key)
@@ -41,11 +46,12 @@ public class JwtUtil {
                 .getBody();
     }
 
+    // userId(Long) 추출
     public Long validateAndGetUserId(String token) {
         return Long.valueOf(parse(token).getSubject());
     }
 
-    /** 기존 코드 호환용: 토큰 유효성만 체크 (서명/만료 등) */
+    //  토큰 유효성만 체크 (서명/만료 등)
     public boolean validateToken(String token) {
         try {
             parse(token);
@@ -58,7 +64,7 @@ public class JwtUtil {
     // 토큰에서 userId를 꺼내 그 문자열을 Principal로 넣어 Authentication 생성
     public Authentication getAuthentication(String token) {
         Long userId = validateAndGetUserId(token);
-        String principal = String.valueOf(userId); // 컨트롤러에서 그대로 사용
+        String principal = String.valueOf(userId); // 컨트롤러에서 그대로 사용(예: @AuthenticationPrincipal String userId)
         return new UsernamePasswordAuthenticationToken(
                 principal,
                 null,
