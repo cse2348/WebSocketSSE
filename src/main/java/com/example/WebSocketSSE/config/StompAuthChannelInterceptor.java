@@ -2,14 +2,20 @@ package com.example.WebSocketSSE.config;
 
 import com.example.WebSocketSSE.jwt.JwtUtil;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.messaging.support.MessageBuilder;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
+import java.util.Collections;
+
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
@@ -26,30 +32,25 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 String auth = acc.getFirstNativeHeader("Authorization");
                 if (auth == null) auth = acc.getFirstNativeHeader("authorization");
 
-                if (auth == null || auth.isBlank()) {
-                    throw new IllegalArgumentException("Missing Authorization header");
-                }
-
-                // 2) "Bearer", "Bearer    ", "bearer", 공백 유무 전부 허용
-                String token;
-                if (auth.regionMatches(true, 0, "Bearer", 0, 6)) {
-                    token = auth.substring(6).trim(); // "Bearer" 제거 후 공백 트림
+                if (auth != null && !auth.isBlank()) {
+                    // 2) JwtUtil이 Bearer 제거 처리하도록 맡김(내부에서 strip 처리)
+                    Long userId = jwtUtil.validateAndGetUserId(auth);
+                    Authentication authentication = new UsernamePasswordAuthenticationToken(
+                            String.valueOf(userId), null, Collections.emptyList());
+                    acc.setUser(authentication);
+                    log.info("[WS] CONNECT auth OK userId={}", userId);
                 } else {
-                    // 혹시 토큰만 들어오는 경우도 허용
-                    token = auth.trim();
+                    // Authorization 없으면 익명으로 통과 (SUBSCRIBE/SEND에서 policy로 걸러짐)
+                    log.info("[WS] CONNECT without Authorization (anonymous)");
                 }
-                if (token.isEmpty()) throw new IllegalArgumentException("Empty JWT token");
-
-                // 3) 토큰 → Authentication (principal = userId 문자열)
-                Authentication authentication = jwtUtil.getAuthentication(token);
-                acc.setUser(authentication);
-
-                System.out.println("[STOMP] 인증 성공 - principal=" + authentication.getPrincipal());
             } catch (Exception e) {
-                System.out.println("[STOMP] 인증 처리 중 예외: " + e.getClass().getSimpleName() + " - " + e.getMessage());
-                throw e;
+                // 인증 실패 시 예외 처리
+                log.warn("[WS] CONNECT auth fail: {}", e.getMessage());
             }
+            // 헤더 업데이트 반영해 재빌드 필수
+            return MessageBuilder.createMessage(message.getPayload(), acc.getMessageHeaders());
         }
+
         return message;
     }
 }

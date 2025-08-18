@@ -7,6 +7,7 @@ import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
+import org.springframework.web.socket.config.annotation.WebSocketTransportRegistration;
 
 @Configuration
 @EnableWebSocketMessageBroker
@@ -17,22 +18,30 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 구독 경로: /topic
         registry.enableSimpleBroker("/topic");
-        // 발행 경로: /app
         registry.setApplicationDestinationPrefixes("/app");
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 연결 엔드포인트 (SockJS fallback 포함)
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*"); // 프론트 도메인만 허용 권장
+                .setAllowedOriginPatterns("*");
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // STOMP 메시지 들어올 때 JWT 인증 처리
-        registration.interceptors(stompAuthChannelInterceptor);
+        registration
+                .interceptors(stompAuthChannelInterceptor)
+                .taskExecutor()
+                .corePoolSize(4)
+                .maxPoolSize(16)
+                .queueCapacity(1000);
+    }
+
+    @Override
+    public void configureWebSocketTransport(WebSocketTransportRegistration reg) {
+        reg.setMessageSizeLimit(64 * 1024);
+        reg.setSendBufferSizeLimit(512 * 1024);
+        reg.setSendTimeLimit(20_000);
     }
 }
