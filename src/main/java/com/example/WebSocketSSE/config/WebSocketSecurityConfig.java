@@ -5,6 +5,7 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.Message;
 import org.springframework.security.authorization.AuthorizationManager;
 import org.springframework.security.messaging.access.intercept.MessageMatcherDelegatingAuthorizationManager;
+import org.springframework.messaging.simp.SimpMessageType;
 
 @Configuration
 public class WebSocketSecurityConfig {
@@ -16,9 +17,13 @@ public class WebSocketSecurityConfig {
                 MessageMatcherDelegatingAuthorizationManager.builder();
 
         messages
-                // /app/** 목적지로 오는 모든 메시지(SEND/SUBSCRIBE 등)는 인증 필요
+                // 애플리케이션 목적지로의 전송(/app/**)은 인증 필요
                 .simpDestMatchers("/app/**").authenticated()
-                // 그 외는 허용 (CONNECT 등)
+                // 브로커 구독 경로: 채팅방/개인 큐 구독도 인증 요구
+                .simpSubscribeDestMatchers("/topic/**", "/queue/**", "/user/**").authenticated()
+                // CONNECT/DISCONNECT 등은 모두 허용
+                .simpTypeMatchers(SimpMessageType.CONNECT, SimpMessageType.DISCONNECT).permitAll()
+                // 그 외 나머지는 일단 허용 (필요시 tightened)
                 .anyMessage().permitAll();
 
         return messages.build();
