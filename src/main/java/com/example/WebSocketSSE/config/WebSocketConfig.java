@@ -11,13 +11,12 @@ import org.springframework.web.socket.config.annotation.*;
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final StompAuthChannelInterceptor stompAuthChannelInterceptor; // WebSocketAuthConfig에서 등록한 인터셉터
+    private final StompAuthChannelInterceptor stompAuthChannelInterceptor; // JWT 인증 인터셉터
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*")
-                .withSockJS(); // SockJS fallback (원치 않으면 제거 가능)
+                .setAllowedOriginPatterns("*"); //네이티브 WebSocket만 사용
     }
 
     @Override
@@ -28,7 +27,6 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(stompAuthChannelInterceptor); // JWT 인증 인터셉터 등록
+        registration.interceptors(stompAuthChannelInterceptor); // STOMP CONNECT 시 토큰 인증 처리
     }
 }
-
