@@ -21,17 +21,26 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message); // STOMP 헤더 추출
 
         // CONNECT 명령일 때 JWT 검증 수행
-        if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) { // enum으로 안전 비교
+        if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
             String token = accessor.getFirstNativeHeader("Authorization"); // Authorization 헤더 값 가져오기
+            System.out.println("[STOMP] Authorization 헤더: " + token);
 
-            if (token == null || !token.startsWith("Bearer ")) { // 누락 시 명확히 에러발생
+            if (token == null || !token.startsWith("Bearer ")) {
+                System.out.println("[STOMP] Authorization 헤더 없음 또는 형식 불일치");
                 throw new IllegalArgumentException("Missing Authorization Bearer token in STOMP CONNECT");
             }
 
-            token = token.substring(7); // Bearer 제거하여 실제 토큰만 추출
+            token = token.substring(7); // Bearer 제거
+            System.out.println("[STOMP] 추출된 토큰: " + token);
 
             // JwtUtil로 Authentication 객체 생성
             Authentication authentication = jwtUtil.getAuthentication(token);
+
+            if (authentication != null) {
+                System.out.println("[STOMP] 인증 성공 - 사용자: " + authentication.getName());
+            } else {
+                System.out.println("[STOMP] 인증 실패 - Authentication 객체 null");
+            }
 
             // STOMP 세션에 Authentication 등록
             accessor.setUser(authentication);
