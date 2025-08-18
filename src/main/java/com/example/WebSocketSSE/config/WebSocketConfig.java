@@ -4,30 +4,36 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
-import org.springframework.web.socket.config.annotation.*;
+import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
+import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
+import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final StompAuthChannelInterceptor stompAuthChannelInterceptor; // JWT 인증 인터셉터
-
-    @Override
-    public void registerStompEndpoints(StompEndpointRegistry registry) {
-        registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*"); // 네이티브 WebSocket → SockJS 제거
-    }
+    private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic", "/queue", "/user"); // 브로커 프리픽스
-        registry.setApplicationDestinationPrefixes("/app");       // 클라이언트 발행 프리픽스
-        registry.setUserDestinationPrefix("/user");               // 개인 큐 지원
+        // 구독 경로: /topic
+        registry.enableSimpleBroker("/topic");
+        // 발행 경로: /app
+        registry.setApplicationDestinationPrefixes("/app");
+    }
+
+    @Override
+    public void registerStompEndpoints(StompEndpointRegistry registry) {
+        // WebSocket 연결 엔드포인트 (SockJS fallback 포함)
+        registry.addEndpoint("/ws/chat")
+                .setAllowedOriginPatterns("*") // 프론트 도메인만 허용 권장
+                .withSockJS();
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(stompAuthChannelInterceptor); // STOMP CONNECT 시 JWT 인증
+        // STOMP 메시지 들어올 때 JWT 인증 처리
+        registration.interceptors(stompAuthChannelInterceptor);
     }
 }

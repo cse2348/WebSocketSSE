@@ -1,12 +1,15 @@
 package com.example.WebSocketSSE.config;
 
+import com.example.WebSocketSSE.entity.User;
 import com.example.WebSocketSSE.jwt.JwtUtil;
+import com.example.WebSocketSSE.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.messaging.Message;
 import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
@@ -15,45 +18,49 @@ import org.springframework.stereotype.Component;
 public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
     private final JwtUtil jwtUtil;
+    private final UserRepository userRepository;
 
     @Override
-    // preSend 메서드는 STOMP 메시지가 채널로 전송되기 전에 호출 -> STOMP CONNECT 요청에 대한 JWT 인증을 수행
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
-        // STOMP 메시지 헤더를 StompHeaderAccessor로 래핑
         StompHeaderAccessor accessor = StompHeaderAccessor.wrap(message);
-
-        // STOMP CONNECT 시 인증 수행
+        //`
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            // [추가] JWT 검증 중 발생할 수 있는 예외를 처리하기 위한 try-catch 블록
+            // STOMP CONNECT 요청 시 Authorization 헤더에서 JWT 토큰 추출 및 검증
             try {
-                // Authorization 헤더에서 JWT 토큰 추출
                 String token = accessor.getFirstNativeHeader("Authorization");
-                // 디버깅용 로그 출력
                 System.out.println("[STOMP] Authorization 헤더: " + token);
 
                 if (token == null || !token.startsWith("Bearer ")) {
-                    // Authorization 헤더가 없거나 형식이 잘못된 경우 예외 발생
-                    System.out.println("[STOMP] Authorization 헤더 없음/형식 불일치");
-                    // 예외 발생
                     throw new IllegalArgumentException("Missing or invalid Authorization header in STOMP CONNECT");
                 }
 
-                token = token.substring(7); // Bearer  제거
+                token = token.substring(7); // "Bearer " 제거
                 System.out.println("[STOMP] 추출된 토큰: " + token);
-                // JWT 토큰 검증 및 Authentication 객체 생성
+
+                // 1) JWT 로 username 가져오기
                 Authentication authentication = jwtUtil.getAuthentication(token);
-                // 디버깅용 로그 출력
-                if (authentication != null) {
-                    System.out.println("[STOMP] 인증 성공 - 사용자: " + authentication.getName());
-                    accessor.setUser(authentication); // 세션에 Authentication 심기
-                } else {
-                    // 이 경우는 getAuthentication 내부에서 null을 반환하도록 구현했을 때 해당됩니다.
-                    System.out.println("[STOMP] 인증 실패 - Authentication null");
+
+                if (authentication == null) {
                     throw new IllegalArgumentException("Invalid JWT token");
                 }
+
+                // 2) username → userId 변환
+                Long userId = userRepository.findByUsername(authentication.getName())
+                        .map(User::getId)
+                        .orElseThrow(() -> new IllegalArgumentException("User not found: " + authentication.getName()));
+
+                // 3) Principal 에 userId 저장 (String)
+                Authentication simpAuth = new UsernamePasswordAuthenticationToken(
+                        userId.toString(), // principal.getName() → userId 로 들어감
+                        null,
+                        authentication.getAuthorities()
+                );
+
+                accessor.setUser(simpAuth);
+                System.out.println("[STOMP] 인증 성공 - 사용자 ID: " + userId);
+
             } catch (Exception e) {
-                // [추가] 예외 발생 시, 어떤 예외인지 로그를 남기고 다시 던져서 연결을 차단합니다.
-                System.out.println("[STOMP] 인증 처리 중 예외 발생: " + e.getClass().getName() + " - " + e.getMessage());
+                System.out.println("[STOMP] 인증 처리 중 예외 발생: " + e.getMessage());
                 throw e;
             }
         }
