@@ -16,17 +16,18 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*"); //네이티브 WebSocket만 사용
+                .setAllowedOriginPatterns("*"); // 네이티브 WebSocket → SockJS 제거
     }
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic", "/queue"); // 구독 prefix
-        registry.setApplicationDestinationPrefixes("/app"); // 발행 prefix
+        registry.enableSimpleBroker("/topic", "/queue", "/user"); // 브로커 프리픽스
+        registry.setApplicationDestinationPrefixes("/app");       // 클라이언트 발행 프리픽스
+        registry.setUserDestinationPrefix("/user");               // 개인 큐 지원
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        registration.interceptors(stompAuthChannelInterceptor); // STOMP CONNECT 시 토큰 인증 처리
+        registration.interceptors(stompAuthChannelInterceptor); // STOMP CONNECT 시 JWT 인증
     }
 }
