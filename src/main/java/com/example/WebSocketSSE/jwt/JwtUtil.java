@@ -4,6 +4,7 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
+import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -44,13 +45,22 @@ public class JwtUtil {
         return Long.valueOf(parse(token).getSubject());
     }
 
-    // 토큰에서 userId를 꺼내 **그 문자열을 principal** 로 넣어 Authentication 생성
+    /** 기존 코드 호환용: 토큰 유효성만 체크 (서명/만료 등) */
+    public boolean validateToken(String token) {
+        try {
+            parse(token);
+            return true;
+        } catch (JwtException | IllegalArgumentException e) {
+            return false;
+        }
+    }
+
+    // 토큰에서 userId를 꺼내 그 문자열을 Principal로 넣어 Authentication 생성
     public Authentication getAuthentication(String token) {
         Long userId = validateAndGetUserId(token);
-        String principal = String.valueOf(userId); // ← 컨트롤러에서 그대로 사용
-
+        String principal = String.valueOf(userId); // 컨트롤러에서 그대로 사용
         return new UsernamePasswordAuthenticationToken(
-                principal,            // principal: "2" 같은 문자열
+                principal,
                 null,
                 Collections.emptyList()
         );
