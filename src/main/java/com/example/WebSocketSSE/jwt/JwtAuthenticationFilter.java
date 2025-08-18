@@ -24,7 +24,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // 요청마
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
         String token = resolveToken(request); // 요청 헤더에서 JWT 토큰 추출
-        if (token != null) { // 토큰이 존재하면
+        if (token != null) {
             Long userId = jwtUtil.validateAndGetUserId(token); // 토큰 검증 및 사용자 ID 추출
             UsernamePasswordAuthenticationToken auth =
                     new UsernamePasswordAuthenticationToken(userId, null, null); // 인증 객체 생성 (권한은 null)
