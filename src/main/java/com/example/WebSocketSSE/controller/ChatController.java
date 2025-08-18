@@ -6,39 +6,29 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;                 // ★ 바디 역직렬화용
+import org.springframework.messaging.handler.annotation.Payload;  // ★ payload 명시
 import org.springframework.messaging.simp.SimpMessagingTemplate;
-import org.springframework.security.core.annotation.AuthenticationPrincipal; // ★ STOMP Principal 주입
 import org.springframework.stereotype.Controller;
+
+import java.security.Principal;
 
 @Slf4j
 @Controller
 @RequiredArgsConstructor
 public class ChatController {
 
-    private final SimpMessagingTemplate template; // 특정 주제(/topic/...)로 메시지 브로드캐스트
-    private final ChatService chatService;        // 메시지 저장/조회 등 비즈니스 로직
+    private final SimpMessagingTemplate template;
+    private final ChatService chatService;
 
-    /**
-     * 클라이언트에서 "/app/chat/{roomId}/send"로 전송한 STOMP 메시지를 처리한다.
-     * - 구독 경로는 "/topic/chat/{roomId}"
-     * - 인터셉터에서 principal에 userId 문자열을 심어둔 전제(@AuthenticationPrincipal String userId)
-     *
-     * 예) 클라이언트 전송
-     * stompClient.send("/app/chat/1/send", {}, JSON.stringify({ "content": "안녕" }));
-     *
-     * 주의:
-     * - ChatMessageDto는 반드시 기본 생성자 + getter/setter가 있어야 역직렬화가 된다.
-     *   (예: Lombok @Data, @NoArgsConstructor 사용)
-     */
+    // 클라이언트 → /app/chat/{roomId}/send
+    // 구독 경로  → /topic/chat/{roomId}
     @MessageMapping("/chat/{roomId}/send")
     public void send(@DestinationVariable Long roomId,
-                     @Payload ChatMessageDto dto,            // ★ JSON 바디 → DTO로 역직렬화
-                     @AuthenticationPrincipal String userId)  // ★ principal에 넣어둔 userId 문자열
-    {
-        // --- 방어 로직 (디버깅 시 원인 파악 용이) ---
-        if (userId == null || userId.isBlank()) {
-            throw new IllegalStateException("Unauthenticated STOMP message (missing principal userId)");
+                     @Payload ChatMessageDto dto,   //  바디를 DTO로 강제 매핑
+                     Principal principal) {          // userId는 principal.getName()
+
+        if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
+            throw new IllegalStateException("Unauthenticated STOMP message (missing principal)");
         }
         if (roomId == null) {
             throw new IllegalArgumentException("roomId is required");
@@ -47,19 +37,28 @@ public class ChatController {
             throw new IllegalArgumentException("message content is required");
         }
 
-        // --- 서버에서 강제 세팅(프론트가 보낸 값 덮어씀) ---
-        dto.setSenderId(Long.parseLong(userId)); // principal → Long 변환
-        dto.setRoomId(roomId);                   // 경로 변수에서 받은 roomId 사용
+        // principal.getName()에는 인터셉터에서 넣어준 userId 문자열("2" 등)이 들어있어야 함
+        String name = principal.getName();
 
-        // --- 저장(영속화) ---
+        // 디버깅에 도움: 혹시라도 name에 JSON이 들어오면 바로 확인 가능
+        if (!name.chars().allMatch(Character::isDigit)) {
+            log.error("[CHAT] principal.getName() is not numeric. name={}", name);
+            throw new IllegalStateException("Principal name is not numeric userId: " + name);
+        }
+
+        Long userId = Long.parseLong(name);
+
+        // 서버에서 강제 세팅 (프론트가 보낸 senderId/roomId는 무시)
+        dto.setSenderId(userId);
+        // 프론트에서 보낸 roomId가 null이 아니면 그대로 사용
+        dto.setRoomId(roomId);
+        // 채팅 메시지 저장
         var saved = chatService.save(dto);
-
-        // --- 브로드캐스트: 이 방을 구독 중인 모두에게 전송 ---
+        // 구독자에게 메시지 전송
         String destination = "/topic/chat/" + saved.getRoomId();
+        // SimpMessagingTemplate를 사용하여 메시지 전송
         template.convertAndSend(destination, saved);
-
-        // --- 로깅 ---
-        log.info("[CHAT] roomId={}, senderId={}, content={}",
-                saved.getRoomId(), saved.getSenderId(), saved.getContent());
+        // 디버깅 로그
+        log.info("[CHAT] sent to {} by userId={} content={}", destination, userId, saved.getContent());
     }
 }

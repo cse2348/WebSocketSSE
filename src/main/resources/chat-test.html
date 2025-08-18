@@ -36,7 +36,7 @@
 </div>
 
 <div class="row">
-    <input id="message" placeholder="메시지 입력">
+    <input id="message" placeholder="메시지 입력 (Enter로 전송)">
     <button id="btnSend" disabled>보내기</button>
 </div>
 
@@ -52,40 +52,42 @@
         el.scrollTop = el.scrollHeight;
     };
 
+    const buildWsUrl = (base) => {
+        const url = new URL(base);
+        if (url.protocol === "https:") return "wss://" + url.host + "/ws/chat";
+        if (url.protocol === "http:")  return "ws://"  + url.host + "/ws/chat";
+        throw new Error("URL은 http:// 또는 https:// 이어야 합니다.");
+    };
+
     $("btnConnect").onclick = () => {
         const base = $("base").value.trim();
         const token = $("token").value.trim();
         if (!token) { alert("JWT 토큰을 입력하세요 (/auth/login 응답)"); return; }
 
-        // 안전하게 http→ws, https→wss 변환
         let wsUrl;
-        try {
-            const url = new URL(base);
-            if (url.protocol === "https:") {
-                wsUrl = "wss://" + url.host + "/ws/chat";
-            } else if (url.protocol === "http:") {
-                wsUrl = "ws://" + url.host + "/ws/chat";
-            } else {
-                throw new Error("URL은 http:// 또는 https:// 이어야 합니다.");
-            }
-        } catch (e) {
-            alert("서버 주소가 잘못되었습니다. (예: https://backendteamb.site)");
-            return;
-        }
+        try { wsUrl = buildWsUrl(base); }
+        catch { alert("서버 주소가 잘못되었습니다. (예: https://backendteamb.site)"); return; }
 
         log(`웹소켓 연결 시도 → ${wsUrl}`);
         const sock = new WebSocket(wsUrl);
         stompClient = Stomp.over(sock);
 
-        // 디버그 로그 출력
+        // STOMP 디버그 로그
         stompClient.debug = (s) => log("[STOMP DEBUG] " + s);
 
         stompClient.connect(
             { Authorization: "Bearer " + token }, // CONNECT 헤더
             frame => {
-                log("연결 성공: " + frame);
+                log("연결 성공: " + frame.command + " " + JSON.stringify(frame.headers));
                 $("btnSubscribe").disabled = false;
                 $("btnDisconnect").disabled = false;
+
+                // (선택) 서버에서 @MessageExceptionHandler로 내려주는 에러 큐 구독
+                try {
+                    stompClient.subscribe("/user/queue/errors", (msg) => {
+                        log("서버 에러: " + msg.body);
+                    });
+                } catch (_) {}
             },
             err => {
                 log("연결 실패: " + err);
@@ -96,11 +98,18 @@
     $("btnSubscribe").onclick = () => {
         const roomId = $("roomId").value.trim();
         if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
-
         const topic = "/topic/chat/" + roomId;
+
         stompClient.subscribe(topic, (msg) => {
-            log("수신: " + msg.body);
+            // 수신 메시지 예쁘게 출력 (JSON 파싱 우선)
+            try {
+                const data = JSON.parse(msg.body);
+                log(`수신: content="${data.content}" senderId=${data.senderId} roomId=${data.roomId} id=${data.id ?? "-"} at=${data.createdAt ?? "-"}`);
+            } catch {
+                log("수신(raw): " + msg.body);
+            }
         });
+
         log("구독 요청: " + topic);
         $("btnSend").disabled = false;
     };
@@ -109,9 +118,17 @@
         const roomId = $("roomId").value.trim();
         const text = $("message").value;
         if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
+        if (!text || !text.trim()) { alert("메시지를 입력하세요"); return; }
 
-        const payload = { content: text };
-        stompClient.send(`/app/chat/${roomId}/send`, {}, JSON.stringify(payload));
+        const payload = { content: text.trim() };
+
+        // ★ 핵심: content-type을 application/json으로 지정
+        stompClient.send(
+            `/app/chat/${roomId}/send`,
+            { "content-type": "application/json" },
+            JSON.stringify(payload)
+        );
+
         log("전송: " + JSON.stringify(payload));
         $("message").value = "";
     };
@@ -124,6 +141,11 @@
         $("btnSend").disabled = true;
         $("btnDisconnect").disabled = true;
     };
+
+    // Enter로 전송
+    $("message").addEventListener("keydown", (e) => {
+        if (e.key === "Enter") $("btnSend").click();
+    });
 </script>
 </body>
 </html>
