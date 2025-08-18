@@ -27,8 +27,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         // WebSocket 연결 엔드포인트 (SockJS fallback 포함)
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*") // 프론트 도메인만 허용 권장
-                .withSockJS();
+                .setAllowedOriginPatterns("*"); // 프론트 도메인만 허용 권장
     }
 
     @Override

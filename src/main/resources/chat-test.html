@@ -6,15 +6,15 @@
     <style>
         body { font-family: system-ui, sans-serif; max-width: 720px; margin: 24px auto; }
         input, button { padding: 8px; margin: 4px 0; }
-        #log { white-space: pre-wrap; border: 1px solid #ddd; padding: 12px; height: 280px; overflow: auto; }
+        #log { white-space: pre-wrap; border: 1px solid #ddd; padding: 12px; height: 300px; overflow: auto; background: #f9f9f9; }
         .row { display:flex; gap:8px; align-items:center; }
         .row > input { flex: 1 }
     </style>
-    <!-- CDN: STOMP -->
+    <!-- STOMP 라이브러리 -->
     <script src="https://cdn.jsdelivr.net/npm/stompjs@2.3.3/lib/stomp.min.js"></script>
 </head>
 <body>
-<h2>WebSocket(STOMP) 채팅 테스트 (네이티브 WebSocket)</h2>
+<h2>WebSocket(STOMP) 채팅 테스트</h2>
 
 <div class="row">
     <label style="width:110px">서버</label>
@@ -46,55 +46,80 @@
 <script>
     let stompClient = null;
     const $ = (id) => document.getElementById(id);
-    const log = (msg) => { const el = $("log"); el.textContent += msg + "\n"; el.scrollTop = el.scrollHeight; };
+    const log = (msg) => {
+        const el = $("log");
+        el.textContent += `[${new Date().toLocaleTimeString()}] ${msg}\n`;
+        el.scrollTop = el.scrollHeight;
+    };
 
     $("btnConnect").onclick = () => {
         const base = $("base").value.trim();
         const token = $("token").value.trim();
         if (!token) { alert("JWT 토큰을 입력하세요 (/auth/login 응답)"); return; }
 
-        // 네이티브 WebSocket URL 생성 (http → ws, https → wss)
-        const wsUrl = base.replace(/^http/, "ws") + "/ws/chat";
+        // 안전하게 http→ws, https→wss 변환
+        let wsUrl;
+        try {
+            const url = new URL(base);
+            if (url.protocol === "https:") {
+                wsUrl = "wss://" + url.host + "/ws/chat";
+            } else if (url.protocol === "http:") {
+                wsUrl = "ws://" + url.host + "/ws/chat";
+            } else {
+                throw new Error("URL은 http:// 또는 https:// 이어야 합니다.");
+            }
+        } catch (e) {
+            alert("서버 주소가 잘못되었습니다. (예: https://backendteamb.site)");
+            return;
+        }
 
+        log(`웹소켓 연결 시도 → ${wsUrl}`);
         const sock = new WebSocket(wsUrl);
         stompClient = Stomp.over(sock);
-        stompClient.debug = (s) => log(s);
 
-        // CONNECT 헤더에 JWT 넣기
+        // 디버그 로그 출력
+        stompClient.debug = (s) => log("[STOMP DEBUG] " + s);
+
         stompClient.connect(
-            { Authorization: "Bearer " + token }, // 헤더 전달
+            { Authorization: "Bearer " + token }, // CONNECT 헤더
             frame => {
-                log("연결됨: " + frame);
+                log("연결 성공: " + frame);
                 $("btnSubscribe").disabled = false;
                 $("btnDisconnect").disabled = false;
             },
-            err => { log("연결 실패: " + err); }
+            err => {
+                log("연결 실패: " + err);
+            }
         );
     };
 
     $("btnSubscribe").onclick = () => {
         const roomId = $("roomId").value.trim();
         if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
+
         const topic = "/topic/chat/" + roomId;
         stompClient.subscribe(topic, (msg) => {
             log("수신: " + msg.body);
         });
-        log("구독: " + topic);
+        log("구독 요청: " + topic);
         $("btnSend").disabled = false;
     };
 
     $("btnSend").onclick = () => {
-        const roomId = Number($("roomId").value.trim());
+        const roomId = $("roomId").value.trim();
         const text = $("message").value;
         if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
-        const payload = { content: text }; // roomId는 body에 안 넣어도 됨 (컨트롤러에서 @DestinationVariable로 받음)
+
+        const payload = { content: text };
         stompClient.send(`/app/chat/${roomId}/send`, {}, JSON.stringify(payload));
         log("전송: " + JSON.stringify(payload));
         $("message").value = "";
     };
 
     $("btnDisconnect").onclick = () => {
-        if (stompClient) stompClient.disconnect(() => log("연결 해제"));
+        if (stompClient) {
+            stompClient.disconnect(() => log("연결 해제 완료"));
+        }
         $("btnSubscribe").disabled = true;
         $("btnSend").disabled = true;
         $("btnDisconnect").disabled = true;
