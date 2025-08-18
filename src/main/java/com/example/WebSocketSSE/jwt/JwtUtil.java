@@ -3,6 +3,7 @@ package com.example.WebSocketSSE.jwt;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.io.Decoders;
 import io.jsonwebtoken.security.Keys;
 import io.jsonwebtoken.JwtException;
 import org.springframework.beans.factory.annotation.Value;
@@ -10,7 +11,6 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
 
-import java.nio.charset.StandardCharsets;
 import java.security.Key;
 import java.util.Collections;
 import java.util.Date;
@@ -21,9 +21,8 @@ public class JwtUtil {
     private final Key key; // JWT 서명 키
     // 생성자 주입을 통해 application.properties에서 JWT 비밀 키를 읽어옴
     public JwtUtil(@Value("${jwt.secret}") String secret) {
-        // 한쪽은 BASE64, 한쪽은 평문이면 또 서명 오류가 나므로 방식도 통일!
-        // (이번 프로젝트에선 '평문 UTF-8'을 표준으로 사용)
-        byte[] keyBytes = secret.trim().getBytes(StandardCharsets.UTF_8);
+        // UTF-8 인코딩 대신, 표준인 Base64 디코딩으로 수정
+        byte[] keyBytes = Decoders.BASE64.decode(secret.trim());
         this.key = Keys.hmacShaKeyFor(keyBytes);
     }
 
