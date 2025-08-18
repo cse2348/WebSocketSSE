@@ -8,12 +8,8 @@ import org.springframework.messaging.MessageChannel;
 import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
-import org.springframework.messaging.support.MessageBuilder;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Component;
-
-import java.util.Collections;
 
 @Slf4j
 @Component
@@ -26,31 +22,28 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor acc = StompHeaderAccessor.wrap(message);
 
+        // 초기 CONNECT 명령에 대해서만 인증 확인
         if (StompCommand.CONNECT.equals(acc.getCommand())) {
             try {
-                // 1) Authorization 헤더(대/소문자 모두) 조회
-                String auth = acc.getFirstNativeHeader("Authorization");
-                if (auth == null) auth = acc.getFirstNativeHeader("authorization");
+                String authHeader = acc.getFirstNativeHeader("Authorization");
+                if (authHeader == null) authHeader = acc.getFirstNativeHeader("authorization");
 
-                if (auth != null && !auth.isBlank()) {
-                    // 2) JwtUtil이 Bearer 제거 처리하도록 맡김(내부에서 strip 처리)
-                    Long userId = jwtUtil.validateAndGetUserId(auth);
-                    Authentication authentication = new UsernamePasswordAuthenticationToken(
-                            String.valueOf(userId), null, Collections.emptyList());
+                if (authHeader != null && !authHeader.isBlank()) {
+                    // JWT 토큰에서 인증 정보 추출
+                    Authentication authentication = jwtUtil.getAuthentication(authHeader);
+                    // 인증 정보가 유효한 경우 SecurityContext에 설정
                     acc.setUser(authentication);
-                    log.info("[WS] CONNECT auth OK userId={}", userId);
+                    log.info("[WS] CONNECT 인증 성공. userId={}", authentication.getName());
                 } else {
-                    // Authorization 없으면 익명으로 통과 (SUBSCRIBE/SEND에서 policy로 걸러짐)
-                    log.info("[WS] CONNECT without Authorization (anonymous)");
+                    // 익명 연결 허용
+                    log.info("[WS] CONNECT 익명 연결.");
                 }
             } catch (Exception e) {
-                // 인증 실패 시 예외 처리
-                log.warn("[WS] CONNECT auth fail: {}", e.getMessage());
+                log.warn("[WS] CONNECT 인증 실패: {}", e.getMessage());
+                // 연결 거부하기 위해 예외를 다시 던짐
+                throw new IllegalArgumentException("인증 실패: " + e.getMessage());
             }
-            // 헤더 업데이트 반영해 재빌드 필수
-            return MessageBuilder.createMessage(message.getPayload(), acc.getMessageHeaders());
         }
-
         return message;
     }
 }

@@ -17,15 +17,20 @@ public class WebSocketSecurityConfig {
             MessageMatcherDelegatingAuthorizationManager.Builder messages) {
 
         messages
+                // 연결 유지를 위해 기본적인 STOMP 프로토콜 메시지 허용
                 .simpTypeMatchers(
                         SimpMessageType.CONNECT,
                         SimpMessageType.HEARTBEAT,
                         SimpMessageType.DISCONNECT,
                         SimpMessageType.UNSUBSCRIBE
                 ).permitAll()
+
+                // 앱에서 사용하는 메시지 유형 인증
                 .simpDestMatchers("/app/**").authenticated()
+                // 브로커 토픽 구독용 인증
                 .simpSubscribeDestMatchers("/topic/**", "/queue/**", "/user/**").authenticated()
-                .anyMessage().authenticated();
+
+                .anyMessage().denyAll();
 
         return messages.build();
     }
