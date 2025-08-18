@@ -38,15 +38,16 @@ public class JwtUtil {
 
     // Claims 파싱(서명/만료 검증 포함)
     public Claims parse(String token) {
-        return Jwts.parserBuilder()
-                .setSigningKey(key)
-                .build()
-                .parseClaimsJws(token)
-                .getBody();
+        return Jwts.parserBuilder()// JWT 파서 빌더 생성
+                .setSigningKey(key)// 서명 검증을 위한 키 설정
+                .build()// 파서 빌더로부터 JWT 파서 생성
+                .parseClaimsJws(token) // 토큰 파싱 및 검증
+                .getBody(); // Claims 객체 반환
     }
 
     // userId(Long) 추출
     public Long validateAndGetUserId(String token) {
+        // 토큰 파싱 후 Claims에서 subject(=userId) 추출
         return Long.valueOf(parse(token).getSubject());
     }
 
@@ -54,7 +55,9 @@ public class JwtUtil {
     public boolean validateToken(String token) {
         try {
             parse(token);
+            // 토큰이 유효하면 true 반환
             return true;
+            // 만약 토큰이 유효하지 않으면 JwtException이 발생
         } catch (JwtException | IllegalArgumentException e) {
             return false;
         }
@@ -63,11 +66,13 @@ public class JwtUtil {
     // 토큰에서 userId를 꺼내 그 문자열을 Principal로 넣어 Authentication 생성
     public Authentication getAuthentication(String token) {
         Long userId = validateAndGetUserId(token);
-        String principal = String.valueOf(userId); // 컨트롤러에서 그대로 사용(예: @AuthenticationPrincipal String userId)
+        // Principal(주체)의 이름(getName())에 userId를 문자열로 저장
+        String principal = String.valueOf(userId);
+        // 컨트롤러에서 @AuthenticationPrincipal 어노테이션으로 이 userId 값을 쉽게 꺼내 쓸 수 있음
         return new UsernamePasswordAuthenticationToken(
-                principal,
-                null,
-                Collections.emptyList()
+                principal, // 주체 정보 (여기서는 userId)
+                null,      // 자격 증명(비밀번호)은 사용하지 않으므로 null
+                Collections.emptyList() // 권한 정보는 없으므로 빈 리스트
         );
     }
 }
