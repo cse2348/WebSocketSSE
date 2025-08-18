@@ -10,13 +10,15 @@ import org.springframework.security.messaging.access.intercept.MessageMatcherDel
 public class WebSocketSecurityConfig {
 
     @Bean
-    public AuthorizationManager<Message<?>> messageAuthorizationManager(
-            MessageMatcherDelegatingAuthorizationManager.Builder messages) {
+    public AuthorizationManager<Message<?>> messageAuthorizationManager() {
+        // Builder를 직접 생성 (의존성 주입 문제 회피)
+        MessageMatcherDelegatingAuthorizationManager.Builder messages =
+                MessageMatcherDelegatingAuthorizationManager.builder();
 
         messages
-                // /app/** 목적지로 오는 모든 메시지(SEND, SUBSCRIBE 등)는 인증된 사용자만 허용
+                // /app/** 목적지로 오는 모든 메시지(SEND/SUBSCRIBE 등)는 인증 필요
                 .simpDestMatchers("/app/**").authenticated()
-                // 그 외 다른 모든 메시지 유형은 일단 허용 (CONNECT 등)
+                // 그 외는 허용 (CONNECT 등)
                 .anyMessage().permitAll();
 
         return messages.build();
