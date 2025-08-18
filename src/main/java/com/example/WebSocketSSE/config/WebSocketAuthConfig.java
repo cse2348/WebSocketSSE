@@ -21,7 +21,7 @@ import java.util.Collections;
 @RequiredArgsConstructor
 public class WebSocketAuthConfig {
 
-    private final JwtUtil jwtUtil; // 기존 JwtUtil 사용
+    private final JwtUtil jwtUtil;
 
     @Bean
     public ChannelInterceptor jwtChannelInterceptor() {
@@ -32,24 +32,22 @@ public class WebSocketAuthConfig {
                         MessageHeaderAccessor.getAccessor(message, StompHeaderAccessor.class);
 
                 if (accessor != null && StompCommand.CONNECT.equals(accessor.getCommand())) {
-                    // STOMP CONNECT frame 에서 Authorization 헤더 추출
                     String token = accessor.getFirstNativeHeader("Authorization");
                     if (token != null && token.startsWith("Bearer ")) {
                         token = token.substring(7);
 
                         if (jwtUtil.validateToken(token)) {
-                            String username = jwtUtil.getUsernameFromToken(token);
+                            Long userId = jwtUtil.validateAndGetUserId(token);
 
-                            // 간단한 Authentication 객체 생성
-                            UserDetails principal = User.withUsername(username)
-                                    .password("") // 비번은 불필요
+                            UserDetails principal = User.withUsername(String.valueOf(userId))
+                                    .password("")
                                     .authorities(Collections.emptyList())
                                     .build();
 
                             Authentication auth =
                                     new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
 
-                            accessor.setUser(auth); // 세션 사용자 지정
+                            accessor.setUser(auth); // STOMP 세션에 사용자 등록
                         }
                     }
                 }
