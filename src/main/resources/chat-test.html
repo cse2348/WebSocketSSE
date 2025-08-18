@@ -64,7 +64,7 @@
         stompClient.connect(
             { Authorization: "Bearer " + token }, // 헤더 전달
             frame => {
-                log("🟢 연결됨: " + frame);
+                log("연결됨: " + frame);
                 $("btnSubscribe").disabled = false;
                 $("btnDisconnect").disabled = false;
             },
@@ -87,8 +87,8 @@
         const roomId = Number($("roomId").value.trim());
         const text = $("message").value;
         if (!stompClient || !stompClient.connected) return alert("먼저 연결하세요");
-        const payload = { roomId, content: text };
-        stompClient.send("/app/chat.send", {}, JSON.stringify(payload));
+        const payload = { content: text }; // roomId는 body에 안 넣어도 됨 (컨트롤러에서 @DestinationVariable로 받음)
+        stompClient.send(`/app/chat/${roomId}/send`, {}, JSON.stringify(payload));
         log("전송: " + JSON.stringify(payload));
         $("message").value = "";
     };
