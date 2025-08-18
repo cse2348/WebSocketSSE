@@ -6,7 +6,7 @@ import com.example.WebSocketSSE.entity.User;
 import com.example.WebSocketSSE.jwt.JwtUtil;
 import com.example.WebSocketSSE.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,8 +14,8 @@ import org.springframework.stereotype.Service;
 public class AuthService {
 
     private final UserRepository userRepository; // 사용자 정보 조회/저장 JPA 리포지토리
-    private final BCryptPasswordEncoder encoder; // 비밀번호 암호화/검증 클래스
-    private final JwtUtil jwtUtil; // JWT 생성 및 검증 유틸
+    private final PasswordEncoder encoder;       // PasswordEncoder 인터페이스 (BCrypt 구현체가 주입됨)
+    private final JwtUtil jwtUtil;               // JWT 생성 및 검증 유틸
 
     public LoginResponse login(LoginRequest request) { // 로그인 처리 메서드
         User user = userRepository.findByUsername(request.getUsername()) // username으로 사용자 조회
@@ -29,4 +29,3 @@ public class AuthService {
         return new LoginResponse(token); // 토큰을 포함한 응답 반환
     }
 }
-
