@@ -34,7 +34,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter { // 요청마
                 SecurityContextHolder.getContext().setAuthentication(auth); // SecurityContext에 인증 정보 저장
             }
         } catch (Exception e) {
-            // ❗ 위조/만료 토큰 → 인증만 실패시키고 요청은 계속 진행
+            // 위조/만료 토큰 → 인증만 실패시키고 요청은 계속 진행
             SecurityContextHolder.clearContext();
         }
 

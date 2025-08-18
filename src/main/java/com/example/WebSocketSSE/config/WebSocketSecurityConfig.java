@@ -17,7 +17,7 @@ public class WebSocketSecurityConfig {
             MessageMatcherDelegatingAuthorizationManager.Builder messages) {
 
         messages
-                // 연결 유지를 위해 기본적인 STOMP 프로토콜 메시지 허용
+                // 연결 유지에 필요한 STOMP 프레임은 오픈
                 .simpTypeMatchers(
                         SimpMessageType.CONNECT,
                         SimpMessageType.HEARTBEAT,
@@ -25,12 +25,14 @@ public class WebSocketSecurityConfig {
                         SimpMessageType.UNSUBSCRIBE
                 ).permitAll()
 
-                // 앱에서 사용하는 메시지 유형 인증
+                // 앱으로 들어오는 SEND는 인증 필요
                 .simpDestMatchers("/app/**").authenticated()
-                // 브로커 토픽 구독용 인증
+
+                // 토픽/큐 구독은 인증 필요
                 .simpSubscribeDestMatchers("/topic/**", "/queue/**", "/user/**").authenticated()
 
-                .anyMessage().denyAll();
+                // 나머지는 최소 authenticated (denyAll은 디버깅/운영에 방해)
+                .anyMessage().authenticated();
 
         return messages.build();
     }

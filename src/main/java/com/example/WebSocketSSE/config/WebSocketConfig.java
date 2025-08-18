@@ -18,20 +18,21 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        registry.enableSimpleBroker("/topic");
-        registry.setApplicationDestinationPrefixes("/app");
+        registry.enableSimpleBroker("/topic");      // 구독 경로
+        registry.setApplicationDestinationPrefixes("/app"); // 발행 경로 prefix
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint("/ws/chat")
-                .setAllowedOriginPatterns("*");
+                .setAllowedOriginPatterns("*"); // 운영에선 프론트 도메인으로 제한 권장
+        // SockJS 필요 없으면 생략
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
         registration
-                .interceptors(stompAuthChannelInterceptor)
+                .interceptors(stompAuthChannelInterceptor) // CONNECT에서 인증 셋업(예외 던지지 않도록!)
                 .taskExecutor()
                 .corePoolSize(4)
                 .maxPoolSize(16)
