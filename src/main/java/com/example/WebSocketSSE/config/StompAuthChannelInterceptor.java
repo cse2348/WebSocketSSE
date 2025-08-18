@@ -24,29 +24,37 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
         // STOMP CONNECT 시 인증 수행
         if (StompCommand.CONNECT.equals(accessor.getCommand())) {
-            // Authorization 헤더에서 JWT 토큰 추출
-            String token = accessor.getFirstNativeHeader("Authorization");
-            // 디버깅용 로그 출력
-            System.out.println("[STOMP] Authorization 헤더: " + token);
+            // [추가] JWT 검증 중 발생할 수 있는 예외를 처리하기 위한 try-catch 블록
+            try {
+                // Authorization 헤더에서 JWT 토큰 추출
+                String token = accessor.getFirstNativeHeader("Authorization");
+                // 디버깅용 로그 출력
+                System.out.println("[STOMP] Authorization 헤더: " + token);
 
-            if (token == null || !token.startsWith("Bearer ")) {
-                // Authorization 헤더가 없거나 형식이 잘못된 경우 예외 발생
-                System.out.println("[STOMP] Authorization 헤더 없음/형식 불일치");
-                // 예외 발생
-                throw new IllegalArgumentException("Missing or invalid Authorization header in STOMP CONNECT");
-            }
+                if (token == null || !token.startsWith("Bearer ")) {
+                    // Authorization 헤더가 없거나 형식이 잘못된 경우 예외 발생
+                    System.out.println("[STOMP] Authorization 헤더 없음/형식 불일치");
+                    // 예외 발생
+                    throw new IllegalArgumentException("Missing or invalid Authorization header in STOMP CONNECT");
+                }
 
-            token = token.substring(7); // Bearer  제거
-            System.out.println("[STOMP] 추출된 토큰: " + token);
-            // JWT 토큰 검증 및 Authentication 객체 생성
-            Authentication authentication = jwtUtil.getAuthentication(token);
-            // 디버깅용 로그 출력
-            if (authentication != null) {
-                System.out.println("[STOMP] 인증 성공 - 사용자: " + authentication.getName());
-                accessor.setUser(authentication); // 세션에 Authentication 심기
-            } else {
-                System.out.println("[STOMP] 인증 실패 - Authentication null");
-                throw new IllegalArgumentException("Invalid JWT token");
+                token = token.substring(7); // Bearer  제거
+                System.out.println("[STOMP] 추출된 토큰: " + token);
+                // JWT 토큰 검증 및 Authentication 객체 생성
+                Authentication authentication = jwtUtil.getAuthentication(token);
+                // 디버깅용 로그 출력
+                if (authentication != null) {
+                    System.out.println("[STOMP] 인증 성공 - 사용자: " + authentication.getName());
+                    accessor.setUser(authentication); // 세션에 Authentication 심기
+                } else {
+                    // 이 경우는 getAuthentication 내부에서 null을 반환하도록 구현했을 때 해당됩니다.
+                    System.out.println("[STOMP] 인증 실패 - Authentication null");
+                    throw new IllegalArgumentException("Invalid JWT token");
+                }
+            } catch (Exception e) {
+                // [추가] 예외 발생 시, 어떤 예외인지 로그를 남기고 다시 던져서 연결을 차단합니다.
+                System.out.println("[STOMP] 인증 처리 중 예외 발생: " + e.getClass().getName() + " - " + e.getMessage());
+                throw e;
             }
         }
         return message;
