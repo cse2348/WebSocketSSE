@@ -26,7 +26,9 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         if (StompCommand.CONNECT.equals(acc.getCommand())) {
             try {
                 String authHeader = acc.getFirstNativeHeader("Authorization");
-                if (authHeader == null) authHeader = acc.getFirstNativeHeader("authorization");
+                if (authHeader == null) {
+                    authHeader = acc.getFirstNativeHeader("authorization");
+                }
 
                 if (authHeader != null && !authHeader.isBlank()) {
                     // JWT 토큰에서 인증 정보 추출
@@ -39,9 +41,10 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     log.info("[WS] CONNECT 익명 연결.");
                 }
             } catch (Exception e) {
-                log.warn("[WS] CONNECT 인증 실패: {}", e.getMessage());
+                // 로그를 더 자세히 찍기 (메시지 + 예외 클래스명 + 전체 스택)
+                log.warn("[WS] CONNECT 인증 실패: {} ({})", e.getMessage(), e.getClass().getName(), e);
                 // 연결 거부하기 위해 예외를 다시 던짐
-                throw new IllegalArgumentException("인증 실패: " + e.getMessage());
+                throw new IllegalArgumentException("인증 실패: " + e.getMessage(), e);
             }
         }
         return message;
