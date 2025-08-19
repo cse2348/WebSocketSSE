@@ -7,6 +7,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.Bean;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 @SpringBootApplication
 public class Application {
@@ -16,7 +17,7 @@ public class Application {
 
     // 초기 유저 2명 생성 (비밀번호는 BCrypt로 암호화)
     @Bean
-    CommandLineRunner init(UserRepository userRepository, BCryptPasswordEncoder encoder) {
+    CommandLineRunner init(UserRepository userRepository, PasswordEncoder encoder) {
         return args -> {
             if (!userRepository.existsByUsername("user1")) {
                 userRepository.save(User.of("user1", encoder.encode("pass1"), "ROLE_USER"));
