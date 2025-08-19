@@ -25,20 +25,31 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
         // 초기 CONNECT 명령에 대해서만 인증 확인
         if (StompCommand.CONNECT.equals(acc.getCommand())) {
             try {
-                String authHeader = acc.getFirstNativeHeader("Authorization");
-                if (authHeader == null) {
-                    authHeader = acc.getFirstNativeHeader("authorization");
-                }
+                // 1) 다양한 키에서 토큰 헤더를 시도 (대소문자/대체키 포함)
+                //    - Authorization / authorization / AUTHORIZATION / access_token
+                String rawHeader = firstHeader(acc, "Authorization");
+                if (rawHeader == null) rawHeader = firstHeader(acc, "authorization");
+                if (rawHeader == null) rawHeader = firstHeader(acc, "AUTHORIZATION");
+                if (rawHeader == null) rawHeader = firstHeader(acc, "access_token"); // 쿼리처럼 보내는 클라 대응
 
-                if (authHeader != null && !authHeader.isBlank()) {
-                    // JWT 토큰에서 인증 정보 추출
-                    Authentication authentication = jwtUtil.getAuthentication(authHeader);
-                    // 인증 정보가 유효한 경우 SecurityContext에 설정
+                log.debug("[WS] CONNECT headers={}, pickedAuthHeader={}",
+                        acc.toNativeHeaderMap(), rawHeader);
+
+                if (rawHeader != null && !rawHeader.isBlank()) {
+                    // 2) "Bearer " 접두사 제거 (있든 없든 모두 처리)
+                    String token = normalizeToToken(rawHeader);
+
+                    // 3) JWT 토큰에서 인증 정보 추출 (JwtUtil은 '순수 토큰'을 기대한다고 가정)
+                    Authentication authentication = jwtUtil.getAuthentication(token);
+
+                    // 4) 인증 정보가 유효한 경우 STOMP 세션 Principal에 설정
                     acc.setUser(authentication);
-                    log.info("[WS] CONNECT 인증 성공. userId={}", authentication.getName());
+                    log.info("[WS] CONNECT 인증 성공. principal={}, name={}",
+                            acc.getUser(), authentication.getName());
                 } else {
-                    // 익명 연결 허용
-                    log.info("[WS] CONNECT 익명 연결.");
+                    // (선택) 익명 연결 허용 여부: 보안정책에 따라 차단하고 싶으면 예외로 변경
+                    log.info("[WS] CONNECT 익명 연결 시도(Authorization 헤더 없음).");
+                    // throw new IllegalArgumentException("인증 실패: Authorization 헤더 누락");
                 }
             } catch (Exception e) {
                 // 로그를 더 자세히 찍기 (메시지 + 예외 클래스명 + 전체 스택)
@@ -48,5 +59,22 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
             }
         }
         return message;
+    }
+
+    // 헤더 값 하나 꺼내기 (빈 문자열은 무시)
+
+    private String firstHeader(StompHeaderAccessor acc, String key) {
+        String v = acc.getFirstNativeHeader(key);
+        if (v == null || v.isBlank()) return null;
+        return v.trim();
+    }
+
+    // "Bearer xxx" 형태면 접두사 제거, 아니면 그대로 반환
+    private String normalizeToToken(String headerValue) {
+        String v = headerValue.trim();
+        if (v.regionMatches(true, 0, "Bearer ", 0, 7)) {
+            return v.substring(7).trim();
+        }
+        return v;
     }
 }

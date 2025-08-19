@@ -10,7 +10,9 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.access.AccessDeniedHandler;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration
@@ -18,38 +20,45 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @RequiredArgsConstructor
 public class SecurityConfig {
 
-    private final JwtAuthenticationFilter jwtAuthenticationFilter; // 스프링이 주입하는 필터 빈
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
 
-    // 비밀번호 암호화용 Bean
+    // 401 / 403 JSON 응답용 (아래 2,3번 코드와 함께 사용)
+    private final AuthenticationEntryPoint restAuthenticationEntryPoint;
+    private final AccessDeniedHandler restAccessDeniedHandler;
+
     @Bean
     public PasswordEncoder passwordEncoder() {
         return new BCryptPasswordEncoder();
     }
 
-    // HTTP 보안 필터 체인
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // CSRF 비활성화 (JWT 기반)
+                // JWT 기반
                 .csrf(csrf -> csrf.disable())
-                // 세션 미사용
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 엔드포인트 접근 제어
+
+                // 시큐리티 레벨 예외를 JSON으로 통일
+                .exceptionHandling(ex -> ex
+                        .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
+                        .accessDeniedHandler(restAccessDeniedHandler)           // 403
+                )
+
+                // 인가
                 .authorizeHttpRequests(auth -> auth
-                        // WebSocket 핸드셰이크, 로그인, 헬스체크 허용
-                        .requestMatchers("/ws/**", "/auth/**", "/health").permitAll()
-                        // 채팅 히스토리 조회 (GET 허용)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()      // CORS 프리플라이트
+                        .requestMatchers("/ws/**", "/auth/**", "/health").permitAll()// 핸드셰이크, 로그인, 헬스체크
                         .requestMatchers(HttpMethod.GET, "/chat/history/**").permitAll()
-                        // 그 외 인증 필요
+                        .requestMatchers("/sse/subscribe", "/sse/history", "/sse/notify").authenticated()
                         .anyRequest().authenticated()
                 )
-                // 폼/Basic 비활성화 (JWT만 사용)
+
+                // 폼/Basic 미사용
                 .formLogin(f -> f.disable())
                 .httpBasic(b -> b.disable());
 
-        // 빈으로 등록된 필터를 체인에 추가
+        // JWT 필터 등록
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
-
         return http.build();
     }
 }
