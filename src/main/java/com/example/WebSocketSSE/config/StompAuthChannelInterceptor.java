@@ -29,7 +29,7 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 String rawHeader = firstHeader(acc, "Authorization");
                 if (rawHeader == null) rawHeader = firstHeader(acc, "authorization");
                 if (rawHeader == null) rawHeader = firstHeader(acc, "AUTHORIZATION");
-                if (rawHeader == null) rawHeader = firstHeader(acc, "access_token"); // 쿼리 파라미터처럼 보내는 경우 대응
+                if (rawHeader == null) rawHeader = firstHeader(acc, "access_token");
 
                 log.debug("[WS] CONNECT headers={}, pickedAuthHeader={}",
                         acc.toNativeHeaderMap(), rawHeader);
@@ -46,16 +46,14 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                     log.info("[WS] CONNECT 인증 성공. principal={}, name={}",
                             acc.getUser(), authentication.getName());
                 } else {
-                    // (선택) Authorization 헤더 자체가 없으면 익명으로 연결
                     log.info("[WS] CONNECT 익명 연결 시도(Authorization 헤더 없음).");
-                    // 정책상 차단하려면 여기서 throw
-                    // throw new IllegalArgumentException("인증 실패: Authorization 헤더 누락");
                 }
             } catch (Exception e) {
-                // 로그를 더 자세히 찍기 (예외 메시지 + 예외 클래스명 + 전체 스택)
-                log.warn("[WS] CONNECT 인증 실패: {} ({})", e.getMessage(), e.getClass().getName(), e);
-                // 연결 거부: 예외 던져야 클라가 ERROR 프레임 받음
-                throw new IllegalArgumentException("인증 실패: " + e.getMessage(), e);
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // ★★★ 이 부분이 수정된 최종 진단용 코드입니다 ★★★
+                // ★★★ 예외를 던지지 않고, 전체 스택 트레이스를 에러 로그로 남깁니다. ★★★
+                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                log.error("[WS] CONNECT 인증 과정에서 심각한 예외 발생! 원인을 확인해야 합니다.", e);
             }
         }
         return message;
