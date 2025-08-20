@@ -9,6 +9,8 @@ import org.springframework.messaging.simp.stomp.StompCommand;
 import org.springframework.messaging.simp.stomp.StompHeaderAccessor;
 import org.springframework.messaging.support.ChannelInterceptor;
 import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContext;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 
 @Slf4j
@@ -43,16 +45,20 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
 
                     // 4) 인증 정보가 유효한 경우 STOMP 세션 Principal에 설정
                     acc.setUser(authentication);
+
+                    // 중앙 보안 컨텍스트(SecurityContextHolder)에도 등록
+                    // 메시징 보안 체인/표현식에서 인증 정보를 인식하도록 보장
+                    SecurityContext ctx = SecurityContextHolder.createEmptyContext();
+                    ctx.setAuthentication(authentication);
+                    SecurityContextHolder.setContext(ctx);
+
                     log.info("[WS] CONNECT 인증 성공. principal={}, name={}",
                             acc.getUser(), authentication.getName());
                 } else {
                     log.info("[WS] CONNECT 익명 연결 시도(Authorization 헤더 없음).");
                 }
             } catch (Exception e) {
-                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
-                // ★★★ 이 부분이 수정된 최종 진단용 코드입니다 ★★★
-                // ★★★ 예외를 던지지 않고, 전체 스택 트레이스를 에러 로그로 남깁니다. ★★★
-                // ★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★★
+                // 예외 발생 시: 인증 실패로 간주하고 연결 거부
                 log.error("[WS] CONNECT 인증 과정에서 심각한 예외 발생! 원인을 확인해야 합니다.", e);
             }
         }
