@@ -1,22 +1,28 @@
-package com.example.WebSocketSSE.config; // 본인 프로젝트 패키지에 맞게 수정
+package com.example.WebSocketSSE.config;
 
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.security.config.annotation.web.messaging.MessageSecurityMetadataSourceRegistry;
-import org.springframework.security.config.annotation.web.socket.AbstractSecurityWebSocketMessageBrokerConfigurer;
+import org.springframework.messaging.Message;
+import org.springframework.messaging.simp.SimpMessageType;
+import org.springframework.security.authorization.AuthorizationManager;
+import org.springframework.security.config.annotation.web.socket.EnableWebSocketSecurity;
+import org.springframework.security.messaging.access.intercept.MessageMatcherDelegatingAuthorizationManager;
 
 @Configuration
-public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
+@EnableWebSocketSecurity
+public class WebSocketSecurityConfig {
 
-    @Override
-    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
-        // STOMP의 모든 메시지는 인증된 사용자만 허용합니다.
-        // (CONNECT 인증은 저희가 만든 StompAuthChannelInterceptor에서 이미 처리했습니다.)
-        messages.anyMessage().authenticated();
-    }
+    // WebSocket/STOMP 메시지 보안 규칙 정의
+    @Bean
+    public AuthorizationManager<Message<?>> messageAuthorizationManager(
+            MessageMatcherDelegatingAuthorizationManager.Builder messages
+    ) {
+        messages
+                .simpTypeMatchers(SimpMessageType.CONNECT, SimpMessageType.HEARTBEAT).permitAll()
+                .simpDestMatchers("/app/**").authenticated()
+                .simpSubscribeDestMatchers("/topic/**", "/user/queue/**").authenticated()
+                .anyMessage().denyAll();
 
-    // ★★★ 이 메서드가 CSRF 보호를 비활성화하는, 이 모든 문제의 최종 해결책입니다 ★★★
-    @Override
-    protected boolean sameOriginDisabled() {
-        return true;
+        return messages.build();
     }
 }
