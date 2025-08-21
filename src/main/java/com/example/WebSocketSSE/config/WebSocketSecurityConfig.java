@@ -15,24 +15,13 @@ public class WebSocketSecurityConfig {
     @Bean
     public AuthorizationManager<Message<?>> messageAuthorizationManager(
             MessageMatcherDelegatingAuthorizationManager.Builder messages) {
-
         messages
-                // 연결/유지용 프레임은 모두 허용
-                .simpTypeMatchers(
-                        SimpMessageType.CONNECT,
-                        SimpMessageType.HEARTBEAT,
-                        SimpMessageType.DISCONNECT,
-                        SimpMessageType.UNSUBSCRIBE
-                ).permitAll()
+                // WebSocket 연결(CONNECT) 자체는 누구나 시도할 수 있도록 허용
+                // (실제 인증은 StompAuthChannelInterceptor에서 JWT로 처리)
+                .simpTypeMatchers(SimpMessageType.CONNECT).permitAll()
 
-                // /app/** → @MessageMapping → 인증 필요
-                .simpDestMatchers("/app/**").authenticated()
-
-                // topic/queue/user 구독은 인증 필요
-                .simpSubscribeDestMatchers("/topic/**", "/queue/**", "/user/**").authenticated()
-
-                // 나머지는 차단
-                .anyMessage().denyAll();
+                // 그 외 모든 메시지(SEND, SUBSCRIBE 등)는 인증된 사용자만 가능
+                .anyMessage().authenticated();
 
         return messages.build();
     }
