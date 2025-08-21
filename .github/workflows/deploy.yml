@@ -82,6 +82,8 @@ jobs:
             docker stop app || true
             docker rm app || true
 
+
+            docker image prune -a -f
             docker run -d \
               --name app \
               --restart=always \
