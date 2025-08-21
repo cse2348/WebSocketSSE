@@ -34,19 +34,20 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
-                // JWT 기반: CSRF 전체 비활성화(웹소켓/HTTP 모두)
+                // CSRF 완전히 비활성화
                 .csrf(csrf -> csrf.disable())
-
                 .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 
+                // 예외 핸들링 (401 / 403 JSON)
                 .exceptionHandling(ex -> ex
-                        .authenticationEntryPoint(restAuthenticationEntryPoint) // 401
-                        .accessDeniedHandler(restAccessDeniedHandler)           // 403
+                        .authenticationEntryPoint(restAuthenticationEntryPoint)
+                        .accessDeniedHandler(restAccessDeniedHandler)
                 )
 
+                // 인가 정책
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // CORS preflight
-                        .requestMatchers("/ws/**").permitAll()                  // WS 핸드셰이크는 열어둠 (CONNECT에서 JWT 검증)
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll() // CORS 프리플라이트
+                        .requestMatchers("/ws/**").permitAll()                  // WebSocket 핸드셰이크는 열어둠
                         .requestMatchers("/auth/**", "/health").permitAll()
                         .requestMatchers(HttpMethod.GET, "/chat/history/**").permitAll()
                         .requestMatchers("/sse/subscribe", "/sse/history", "/sse/notify").authenticated()
@@ -56,8 +57,9 @@ public class SecurityConfig {
                 .formLogin(f -> f.disable())
                 .httpBasic(b -> b.disable());
 
+        // JWT 필터 등록
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
+
         return http.build();
     }
-
 }
