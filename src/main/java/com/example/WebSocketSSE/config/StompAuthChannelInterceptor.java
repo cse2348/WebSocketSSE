@@ -38,11 +38,12 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
                 log.info("[WS] CONNECT 인증 성공. user={}", authentication.getName());
 
             } catch (Exception e) {
-                log.error("[WS] CONNECT 인증 실패: {}", e.toString(), e);
-                // 원인이 담긴 ERROR 프레임을 내려보내기 위해 MessageDeliveryException으로 던짐
-                throw new MessageDeliveryException("CONNECT rejected: " + e.getMessage());
-            }
+            log.error("[WS] CONNECT 인증 실패: {}", e.toString(), e);
+            // 클라이언트 STOMP ERROR message 헤더에 상세 사유가 찍히도록
+            throw new org.springframework.messaging.MessageDeliveryException("CONNECT rejected: " + e.getMessage());
         }
+
+    }
         return message;
     }
 
