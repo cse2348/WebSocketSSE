@@ -41,18 +41,16 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
                         "https://backendteamb.site",
                         "http://localhost:*",
                         "http://127.0.0.1:*",
-                        "*" // 개발 편의. 운영에선 특정 도메인만
+                        "*" // 개발 편의. 운영에서는 특정 도메인만 허용
                 );
-
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // 순서: 로깅 → JWT 인증 → SecurityContext 전파
         registration.interceptors(
-                inboundLoggingInterceptor(),
-                stompAuthChannelInterceptor,
-                new SecurityContextChannelInterceptor()
+                inboundLoggingInterceptor(),       // 1) 로깅
+                stompAuthChannelInterceptor,       // 2) JWT 인증
+                new SecurityContextChannelInterceptor() // 3) SecurityContext 전파
         );
     }
 
@@ -63,7 +61,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         reg.setSendTimeLimit(20_000);
     }
 
-    // 인바운드 헤더/예외 로깅
+    // 인바운드 로깅 인터셉터
     @Bean
     public ChannelInterceptor inboundLoggingInterceptor() {
         return new ChannelInterceptor() {
@@ -77,7 +75,8 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             }
 
             @Override
-            public void afterSendCompletion(Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
+            public void afterSendCompletion(
+                    Message<?> message, MessageChannel channel, boolean sent, Exception ex) {
                 if (ex != null) {
                     var acc = StompHeaderAccessor.wrap(message);
                     log.error("afterSendCompletion cmd={} ERROR: {}", acc.getCommand(), ex.toString(), ex);
@@ -86,7 +85,7 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
         };
     }
 
-    // STOMP ERROR 프레임 커스터마이징 (클라 콘솔에 상세 사유 노출)
+    // STOMP ERROR 프레임 커스터마이징 (클라에 상세 사유 전달)
     @Bean
     public StompSubProtocolErrorHandler stompSubProtocolErrorHandler() {
         return new StompSubProtocolErrorHandler() {
@@ -94,12 +93,10 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
             public Message<byte[]> handleClientMessageProcessingError(Message<byte[]> clientMessage, Throwable ex) {
                 String msg = "DEBUG: " + (ex.getMessage() != null ? ex.getMessage() : ex.toString());
 
-                // ERROR 프레임 헤더 구성
                 StompHeaderAccessor accessor = StompHeaderAccessor.create(StompCommand.ERROR);
-                accessor.setMessage(msg);               // message 헤더
+                accessor.setMessage(msg);
                 accessor.setLeaveMutable(true);
 
-                // payload(바디)도 같이 내려주고 싶으면 msg 바이트 사용
                 byte[] payload = msg.getBytes(StandardCharsets.UTF_8);
 
                 return MessageBuilder.createMessage(payload, accessor.getMessageHeaders());

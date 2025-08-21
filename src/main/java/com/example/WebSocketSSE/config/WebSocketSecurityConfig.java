@@ -17,7 +17,7 @@ public class WebSocketSecurityConfig {
             MessageMatcherDelegatingAuthorizationManager.Builder messages) {
 
         messages
-                // 연결/유지용 프레임은 오픈
+                // 연결/유지용 프레임은 모두 허용
                 .simpTypeMatchers(
                         SimpMessageType.CONNECT,
                         SimpMessageType.HEARTBEAT,
@@ -25,13 +25,13 @@ public class WebSocketSecurityConfig {
                         SimpMessageType.UNSUBSCRIBE
                 ).permitAll()
 
-                // @MessageMapping("/**") -> /app/** 로 들어오는 SEND는 인증 필수
+                // /app/** → @MessageMapping → 인증 필요
                 .simpDestMatchers("/app/**").authenticated()
 
-                // 구독은 인증 필수 (원하면 .permitAll()로 완화 가능)
+                // topic/queue/user 구독은 인증 필요
                 .simpSubscribeDestMatchers("/topic/**", "/queue/**", "/user/**").authenticated()
 
-                // 목적지 없는 기타 프레임/예외 케이스는 전부 차단
+                // 나머지는 차단
                 .anyMessage().denyAll();
 
         return messages.build();
