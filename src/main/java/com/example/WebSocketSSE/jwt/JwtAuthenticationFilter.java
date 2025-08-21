@@ -27,6 +27,14 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain chain)
             throws ServletException, IOException {
 
+        // WebSocket 핸드셰이크 및 CORS 프리플라이트는 필터를 통과시킴 (STOMP CONNECT에서 인증 처리)
+        String uri = request.getRequestURI();
+        String method = request.getMethod();
+        if ("OPTIONS".equalsIgnoreCase(method) || uri.startsWith("/ws/")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         // Authorization 헤더에서 Bearer 토큰 추출
         try {
             String token = resolveToken(request);

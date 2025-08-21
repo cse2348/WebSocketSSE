@@ -24,55 +24,47 @@ public class StompAuthChannelInterceptor implements ChannelInterceptor {
     public Message<?> preSend(Message<?> message, MessageChannel channel) {
         StompHeaderAccessor acc = StompHeaderAccessor.wrap(message);
 
-        // CONNECT 명령에 대해서만 인증 체크
         if (StompCommand.CONNECT.equals(acc.getCommand())) {
             try {
-                // 1) 다양한 키에서 토큰 헤더를 시도 (대소문자/대체키 포함)
+                // 다양한 키 시도 (대소문자/대체키)
                 String rawHeader = firstHeader(acc, "Authorization");
                 if (rawHeader == null) rawHeader = firstHeader(acc, "authorization");
                 if (rawHeader == null) rawHeader = firstHeader(acc, "AUTHORIZATION");
                 if (rawHeader == null) rawHeader = firstHeader(acc, "access_token");
 
-                log.debug("[WS] CONNECT headers={}, pickedAuthHeader={}",
-                        acc.toNativeHeaderMap(), rawHeader);
+                log.debug("[WS] CONNECT headers={}, pickedAuthHeader={}", acc.toNativeHeaderMap(), rawHeader);
 
                 if (rawHeader != null && !rawHeader.isBlank()) {
-                    // 2) "Bearer " 접두사 제거 (있든 없든 모두 처리)
-                    String token = normalizeToToken(rawHeader);
+                    String token = normalizeToToken(rawHeader);       // Bearer 제거
+                    Authentication auth = jwtUtil.getAuthentication(token); // 구현: UsernamePasswordAuthenticationToken
 
-                    // 3) JWT 토큰에서 인증 정보 추출 (principal=UserPrincipal)
-                    Authentication authentication = jwtUtil.getAuthentication(token);
+                    // STOMP 세션 Principal 지정
+                    acc.setUser(auth);
 
-                    // 4) 인증 정보가 유효한 경우 STOMP 세션 Principal에 설정
-                    acc.setUser(authentication);
-
-                    // 중앙 보안 컨텍스트(SecurityContextHolder)에도 등록
-                    // 메시징 보안 체인/표현식에서 인증 정보를 인식하도록 보장
+                    // SecurityContext에도 등록
                     SecurityContext ctx = SecurityContextHolder.createEmptyContext();
-                    ctx.setAuthentication(authentication);
+                    ctx.setAuthentication(auth);
                     SecurityContextHolder.setContext(ctx);
 
-                    log.info("[WS] CONNECT 인증 성공. principal={}, name={}",
-                            acc.getUser(), authentication.getName());
+                    log.info("[WS] CONNECT 인증 성공. principal={}, name={}", acc.getUser(), auth.getName());
                 } else {
-                    log.info("[WS] CONNECT 익명 연결 시도(Authorization 헤더 없음).");
+                    log.info("[WS] CONNECT 익명 시도(Authorization 없음)");
                 }
             } catch (Exception e) {
-                // 예외 발생 시: 인증 실패로 간주하고 연결 거부
-                log.error("[WS] CONNECT 인증 과정에서 심각한 예외 발생! 원인을 확인해야 합니다.", e);
+                log.error("[WS] CONNECT 인증 실패", e);
+                // 정책상 끊고 싶으면 예외 던지기
+                // throw e;
             }
         }
         return message;
     }
 
-    // 헤더 값 하나 꺼내기 (빈 문자열은 무시)
     private String firstHeader(StompHeaderAccessor acc, String key) {
         String v = acc.getFirstNativeHeader(key);
         if (v == null || v.isBlank()) return null;
         return v.trim();
     }
 
-    // Bearer xxx 형태면 접두사 제거, 아니면 그대로 반환
     private String normalizeToToken(String headerValue) {
         String v = headerValue.trim();
         if (v.regionMatches(true, 0, "Bearer ", 0, 7)) {

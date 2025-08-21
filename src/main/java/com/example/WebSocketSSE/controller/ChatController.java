@@ -6,7 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.messaging.handler.annotation.DestinationVariable;
 import org.springframework.messaging.handler.annotation.MessageMapping;
-import org.springframework.messaging.handler.annotation.Payload;  // ★ payload 명시
+import org.springframework.messaging.handler.annotation.Payload;
 import org.springframework.messaging.simp.SimpMessagingTemplate;
 import org.springframework.stereotype.Controller;
 
@@ -20,12 +20,12 @@ public class ChatController {
     private final SimpMessagingTemplate template;
     private final ChatService chatService;
 
-    // 클라이언트 → /app/chat/{roomId}/send
-    // 구독 경로  → /topic/chat/{roomId}
+    // 클라 전송: /app/chat/{roomId}/send
+    // 구독 경로: /topic/chat/{roomId}
     @MessageMapping("/chat/{roomId}/send")
     public void send(@DestinationVariable Long roomId,
-                     @Payload ChatMessageDto dto,   //  바디를 DTO로 강제 매핑
-                     Principal principal) {          // userId는 principal.getName()
+                     @Payload ChatMessageDto dto,
+                     Principal principal) {
 
         if (principal == null || principal.getName() == null || principal.getName().isBlank()) {
             throw new IllegalStateException("Unauthenticated STOMP message (missing principal)");
@@ -37,10 +37,9 @@ public class ChatController {
             throw new IllegalArgumentException("message content is required");
         }
 
-        // principal.getName()에는 인터셉터에서 넣어준 userId 문자열("2" 등)이 들어있어야 함
         String name = principal.getName();
 
-        // 디버깅에 도움: 혹시라도 name에 JSON이 들어오면 바로 확인 가능
+        // principal.getName()이 userId 문자열이라고 가정 (JwtUtil.getAuthentication 설정에 따름)
         if (!name.chars().allMatch(Character::isDigit)) {
             log.error("[CHAT] principal.getName() is not numeric. name={}", name);
             throw new IllegalStateException("Principal name is not numeric userId: " + name);
@@ -48,17 +47,17 @@ public class ChatController {
 
         Long userId = Long.parseLong(name);
 
-        // 서버에서 강제 세팅 (프론트가 보낸 senderId/roomId는 무시)
+        // 서버에서 강제 세팅 (프론트가 보낸 senderId/roomId 무시)
         dto.setSenderId(userId);
-        // 프론트에서 보낸 roomId가 null이 아니면 그대로 사용
         dto.setRoomId(roomId);
-        // 채팅 메시지 저장
+
+        // DB 저장
         var saved = chatService.save(dto);
-        // 구독자에게 메시지 전송
+
+        // 구독자에게 브로드캐스트
         String destination = "/topic/chat/" + saved.getRoomId();
-        // SimpMessagingTemplate를 사용하여 메시지 전송
         template.convertAndSend(destination, saved);
-        // 디버깅 로그
+
         log.info("[CHAT] sent to {} by userId={} content={}", destination, userId, saved.getContent());
     }
 }
