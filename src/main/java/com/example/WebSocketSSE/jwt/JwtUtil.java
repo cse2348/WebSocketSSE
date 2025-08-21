@@ -21,15 +21,14 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.util.Date;
 
-// JWT 생성/검증 + Spring Security Authentication 생성 유틸
 @Component
 public class JwtUtil {
 
-    private static final Duration DEFAULT_EXP = Duration.ofHours(1); // 1시간
-    private final SecretKey key;                 // JWT 서명 키
-    private final UserRepository userRepository; // DB에서 사용자 로드용
+    private static final Duration DEFAULT_EXP = Duration.ofHours(1); // 기본 만료 시간: 1시간
+    private final SecretKey key; // JWT 서명 키
+    private final UserRepository userRepository; // 사용자 조회용 (권한 부여 위해 필요)
 
-    // @param secret 환경설정의 jwt.secret 값 (Base64 또는 평문 긴 문자열)
+    // jwt.secret 값을 받아 SecretKey 초기화
     public JwtUtil(@Value("${jwt.secret}") String secret,
                    UserRepository userRepository) {
         this.userRepository = userRepository;
@@ -39,27 +38,26 @@ public class JwtUtil {
             throw new IllegalArgumentException("JWT secret is empty. Set jwt.secret / JWT_SECRET.");
         }
 
-        // 1) Base64로 보이면 decode, 아니면 평문 바이트 사용
+        // Base64로 보이면 decode, 아니면 평문 바이트 사용
         byte[] keyBytes;
         if (looksLikeBase64(cleaned)) {
             try {
                 keyBytes = Decoders.BASE64.decode(cleaned);
             } catch (IllegalArgumentException e) {
-                // Base64처럼 보이지만 깨진 값이면 평문으로 폴백
-                keyBytes = cleaned.getBytes(StandardCharsets.UTF_8);
+                keyBytes = cleaned.getBytes(StandardCharsets.UTF_8); // 깨진 값이면 평문으로 처리
             }
         } else {
             keyBytes = cleaned.getBytes(StandardCharsets.UTF_8);
         }
 
-        // 2) HS256 최소 256bit(=32바이트) 권장
+        // HS256은 최소 256bit(32바이트) 이상 필요
         if (keyBytes.length < 32) {
             throw new IllegalArgumentException("JWT secret too short (need >= 32 bytes / 256 bits).");
         }
 
-        this.key = Keys.hmacShaKeyFor(keyBytes);
+        this.key = Keys.hmacShaKeyFor(keyBytes); // 최종 SecretKey 생성
 
-        // 3) 가시화: 서버 기동 시 키 지문(앞 8바이트의 SHA-256) 출력
+        // 서버 기동 시 SecretKey fingerprint 로그 출력 (디버깅용)
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] digest = md.digest(key.getEncoded());
@@ -71,13 +69,13 @@ public class JwtUtil {
         } catch (Exception ignore) { /* no-op */ }
     }
 
-    // Base64로 보일 때만 true (길이 4 배수 + 허용문자 + 최대 2개 패딩)
+    // Base64 문자열 판별
     private boolean looksLikeBase64(String s) {
         if (s.length() % 4 != 0) return false;
         return s.matches("^[A-Za-z0-9+/]+={0,2}$");
     }
 
-    // 토큰 생성 (클레임: sub=userId)
+    // JWT 토큰 생성 (subject=userId)
     public String generateToken(Long userId) {
         if (userId == null) throw new IllegalArgumentException("userId is null.");
         long now = System.currentTimeMillis();
@@ -85,14 +83,14 @@ public class JwtUtil {
         Date exp = new Date(now + DEFAULT_EXP.toMillis());
 
         return Jwts.builder()
-                .setSubject(String.valueOf(userId))
-                .setIssuedAt(iat)
-                .setExpiration(exp)
-                .signWith(key, SignatureAlgorithm.HS256)
+                .setSubject(String.valueOf(userId)) // sub에 userId 저장
+                .setIssuedAt(iat) // 발급 시간
+                .setExpiration(exp) // 만료 시간
+                .signWith(key, SignatureAlgorithm.HS256) // 서명
                 .compact();
     }
 
-    // Bearer 접두사 제거
+    // "Bearer " 접두사 제거
     private String stripBearer(String token) {
         if (token == null) return null;
         String t = token.trim();
@@ -102,58 +100,54 @@ public class JwtUtil {
         return t;
     }
 
-    // Claims 파싱(서명/만료 검증 포함)
+    // Claims 파싱 (서명 검증 + 만료 검증)
     public Claims parse(String token) {
         String raw = stripBearer(token);
         if (raw == null || raw.isEmpty()) {
             throw new IllegalArgumentException("JWT token is empty.");
         }
         return Jwts.parserBuilder()
-                .setSigningKey(key)
+                .setSigningKey(key) // 서명 키 설정
                 .build()
-                .parseClaimsJws(raw)
+                .parseClaimsJws(raw) // 파싱 + 검증
                 .getBody();
     }
 
-    //userId(Long) 추출 (유효성 포함)
+    // 토큰 검증 후 userId(Long) 추출
     public Long validateAndGetUserId(String token) {
         Claims c = parse(token);
-        String sub = c.getSubject();
+        String sub = c.getSubject(); // sub=userId
         if (sub == null || sub.isEmpty()) {
             throw new JwtException("JWT subject is empty.");
         }
         try {
-            return Long.valueOf(sub);
+            return Long.valueOf(sub); // 문자열을 Long으로 변환
         } catch (NumberFormatException e) {
             throw new JwtException("JWT subject is not a valid Long: " + sub);
         }
     }
 
-    //토큰 유효성만 체크
+    // 토큰 유효성만 체크
     public boolean validateToken(String token) {
         try {
             parse(token);
-            return true;
+            return true; // 파싱 성공 = 유효
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return false; // 만료/위조/형식 오류
         }
     }
 
-    // ChatController의 principal.getName()이 userId 숫자 문자열이 되도록 설정
+    // Authentication 객체 생성 (SecurityContextHolder에 넣을 용도)
     public Authentication getAuthentication(String token) {
-        // 1) 토큰에서 userId 추출(검증 포함)
-        Long userId = validateAndGetUserId(token);
+        Long userId = validateAndGetUserId(token); // userId 추출 + 검증
 
-        // 2) DB에서 사용자 로드 (권한 확보용)
-        User user = userRepository.findById(userId)
+        User user = userRepository.findById(userId) // DB에서 사용자 로드
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: id=" + userId));
 
-        // 3) 권한/부가정보 구성
-        UserPrincipal principal = UserPrincipal.from(user);
+        UserPrincipal principal = UserPrincipal.from(user); // User → UserPrincipal 변환
 
-        // 4) Authentication 생성
-        //    - principal: userId 문자열 → principal.getName() == "<userId>"
-        //    - details  : UserPrincipal → 필요 시 컨트롤러/서비스에서 참조 가능
+        //Authentication 생성
+        //principal: userId 문자열 (getName() 반환 값) , details  : UserPrincipal (추가정보, 권한 포함)
         UsernamePasswordAuthenticationToken auth =
                 new UsernamePasswordAuthenticationToken(String.valueOf(userId), null, principal.getAuthorities());
         auth.setDetails(principal);

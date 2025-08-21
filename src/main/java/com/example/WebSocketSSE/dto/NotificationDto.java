@@ -13,6 +13,8 @@ public class NotificationDto {
 
     // 응답/전달용
     private Long id;
+    // 읽음 여부 (true: 읽음, false: 안읽음)
     private Boolean read;
+    // 생성 시간 (DB 저장 시 자동 설정)
     private LocalDateTime createdAt;
 }

@@ -6,14 +6,14 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 @Configuration
 public class SseConfig implements WebMvcConfigurer {
-    // 브라우저서 테스트할 경우 CORS 허용 필요 시 사용
+
     @Override
     public void addCorsMappings(CorsRegistry registry) {
-        registry.addMapping("/sse/**")
-                .allowedMethods("GET","POST")
-                .allowedHeaders("*")
-                .exposedHeaders("Content-Type")
-                .allowCredentials(true)
-                .maxAge(3600);
+        registry.addMapping("/sse/**") // SSE 엔드포인트에 대해 CORS 허용
+                .allowedMethods("GET","POST") // 허용할 HTTP 메서드
+                .allowedHeaders("*") // 모든 요청 헤더 허용
+                .exposedHeaders("Content-Type") // 클라이언트에 노출할 헤더
+                .allowCredentials(true) // 쿠키/인증정보 포함 허용
+                .maxAge(3600); // CORS preflight 결과 캐싱 시간(초)
     }
 }

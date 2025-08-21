@@ -10,28 +10,25 @@ import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerCo
 
 @Configuration
 @EnableWebSocketMessageBroker
-@RequiredArgsConstructor
+@RequiredArgsConstructor // 생성자 주입 자동 생성
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-    private final StompAuthChannelInterceptor stompAuthChannelInterceptor;
+    private final StompAuthChannelInterceptor stompAuthChannelInterceptor; // JWT 인증용 STOMP 인터셉터
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry registry) {
-        // 클라이언트가 구독할 경로(prefix)
-        registry.enableSimpleBroker("/topic", "/queue", "/user");
-        // 클라이언트가 메시지를 발행할 경로(prefix)
-        registry.setApplicationDestinationPrefixes("/app");
+        registry.enableSimpleBroker("/topic", "/queue", "/user"); // 구독 경로(prefix) → 서버가 클라이언트에게 메시지 전달
+        registry.setApplicationDestinationPrefixes("/app"); // 발행 경로(prefix) → 클라이언트가 서버로 메시지 전송할 때 사용
     }
 
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
-        // WebSocket 핸드셰이크를 위한 연결 엔드포인트
-        registry.addEndpoint("/ws/chat").setAllowedOriginPatterns("*");
+        registry.addEndpoint("/ws/chat") // WebSocket 연결 엔드포인트
+                .setAllowedOriginPatterns("*"); // CORS 허용(모든 도메인 접근 허용)
     }
 
     @Override
     public void configureClientInboundChannel(ChannelRegistration registration) {
-        // 직접 만든 JWT 인증 인터셉터를 등록
-        registration.interceptors(stompAuthChannelInterceptor);
+        registration.interceptors(stompAuthChannelInterceptor); // 클라이언트 → 서버 방향(inbound) 인터셉터 등록 (JWT 인증 체크)
     }
 }
