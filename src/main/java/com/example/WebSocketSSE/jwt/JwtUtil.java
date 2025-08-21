@@ -139,26 +139,25 @@ public class JwtUtil {
         }
     }
 
-
+    // ChatController의 principal.getName()이 userId 숫자 문자열이 되도록 설정
     public Authentication getAuthentication(String token) {
         // 1) 토큰에서 userId 추출(검증 포함)
         Long userId = validateAndGetUserId(token);
 
-        // 2) DB에서 사용자 로드 (id 기반)
+        // 2) DB에서 사용자 로드 (권한 확보용)
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UsernameNotFoundException("User not found: id=" + userId));
 
-        // 3) UserPrincipal 구성(권한 포함)
+        // 3) 권한/부가정보 구성
         UserPrincipal principal = UserPrincipal.from(user);
 
-        // 4) Authentication 생성 (principal=UserPrincipal, credentials=null, authorities=principal.getAuthorities())
+        // 4) Authentication 생성
+        //    - principal: userId 문자열 → principal.getName() == "<userId>"
+        //    - details  : UserPrincipal → 필요 시 컨트롤러/서비스에서 참조 가능
         UsernamePasswordAuthenticationToken auth =
-                new UsernamePasswordAuthenticationToken(principal, null, principal.getAuthorities());
-
-        // 사용하기 편하도록 userId를 details에 넣어둔다.
-        auth.setDetails(userId);
+                new UsernamePasswordAuthenticationToken(String.valueOf(userId), null, principal.getAuthorities());
+        auth.setDetails(principal);
 
         return auth;
     }
-
 }
