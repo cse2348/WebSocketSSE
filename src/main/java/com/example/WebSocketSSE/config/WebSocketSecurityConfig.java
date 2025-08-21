@@ -1,28 +1,21 @@
-package com.example.WebSocketSSE.config;
+package com.example.WebSocketSSE.config; // 본인 프로젝트 패키지에 맞게 수정
 
-import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.messaging.Message;
-import org.springframework.messaging.simp.SimpMessageType;
-import org.springframework.security.authorization.AuthorizationManager;
-import org.springframework.security.config.annotation.web.socket.EnableWebSocketSecurity;
-import org.springframework.security.messaging.access.intercept.MessageMatcherDelegatingAuthorizationManager;
+import org.springframework.security.config.annotation.web.messaging.MessageSecurityMetadataSourceRegistry;
+import org.springframework.security.config.annotation.web.socket.AbstractSecurityWebSocketMessageBrokerConfigurer;
 
 @Configuration
-@EnableWebSocketSecurity
-public class WebSocketSecurityConfig {
+public class WebSocketSecurityConfig extends AbstractSecurityWebSocketMessageBrokerConfigurer {
 
-    @Bean
-    public AuthorizationManager<Message<?>> messageAuthorizationManager(
-            MessageMatcherDelegatingAuthorizationManager.Builder messages) {
-        messages
-                // WebSocket 연결(CONNECT) 자체는 누구나 시도할 수 있도록 허용
-                // (실제 인증은 StompAuthChannelInterceptor에서 JWT로 처리)
-                .simpTypeMatchers(SimpMessageType.CONNECT).permitAll()
+    @Override
+    protected void configureInbound(MessageSecurityMetadataSourceRegistry messages) {
+        // STOMP의 모든 메시지는 인증된 사용자만 허용합니다.
+        // (CONNECT 인증은 저희가 만든 StompAuthChannelInterceptor에서 이미 처리했습니다.)
+        messages.anyMessage().authenticated();
+    }
 
-                // 그 외 모든 메시지(SEND, SUBSCRIBE 등)는 인증된 사용자만 가능
-                .anyMessage().authenticated();
-
-        return messages.build();
+    @Override
+    protected boolean sameOriginDisabled() {
+        return true;
     }
 }
